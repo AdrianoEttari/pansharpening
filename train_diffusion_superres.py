@@ -299,7 +299,21 @@ class Diffusion:
 
             if epoch % save_every == 0:
                 self._save_snapshot(epoch)
-                # HERE YOU CAN IMPLEMENT THE SAMPLING FUNCTION TO SEE THE PROGRESS OF THE MODEL
+                fig, axs = plt.subplots(5,3, figsize=(15,15))
+                for i in range(5):
+                    lr_img = val_loader.dataset[i][0]
+                    hr_img = val_loader.dataset[i][1]
+
+                    superres_img = self.sample(n=1, lr_img=lr_img, input_channels=1, plot_gif_bool=False)
+
+                    axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
+                    axs[i,0].set_title('Low resolution image')
+                    axs[i,1].imshow(hr_img.permute(1,2,0).cpu().numpy())
+                    axs[i,1].set_title('High resolution image')
+                    axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
+                    axs[i,2].set_title('Super resolution image')
+
+                plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
 
             if val_loader is not None:
                 with torch.no_grad():
@@ -358,7 +372,6 @@ def launch(args):
         output_channels: the number of output channels
         plot_gif_bool: if True, the function will plot a gif with the generated images for each class
         magnification_factor: the magnification factor (i.e. the factor by which the image is magnified in the super-resolution task)
-        verbose: if True, the function will use the tqdm during the training and the validation
 
     Output:
         None
@@ -379,7 +392,7 @@ def launch(args):
     input_channels, output_channels = args.inp_out_channels, args.inp_out_channels
     plot_gif_bool = args.plot_gif_bool
     magnification_factor = args.magnification_factor
-    verbose = args.verbose
+    
 
     os.makedirs(snapshot_folder_path, exist_ok=True)
     os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
@@ -415,7 +428,7 @@ def launch(args):
     # Training 
     diffusion.train(
         lr=lr, epochs=epochs, save_every=save_every,
-        train_loader=train_loader, val_loader=val_loader, patience=patience, verbose=verbose)
+        train_loader=train_loader, val_loader=val_loader, patience=patience, verbose=True)
     
     # Sampling
     fig, axs = plt.subplots(5,3, figsize=(15,15))
@@ -432,7 +445,6 @@ def launch(args):
         axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
         axs[i,2].set_title('Super resolution image')
 
-    
     plt.savefig(os.path.join(os.getcwd(), 'models_run', model_name, 'results', 'superres_results.png'))
 
     
@@ -445,8 +457,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--image_size', type=int)
     parser.add_argument('--lr', type=float, default=3e-4)
-    parser.add_argument('--save_every', type=int, default=50)
-    parser.add_argument('--noise_schedule', type=str, default='linear')
+    parser.add_argument('--save_every', type=int, default=20)
+    parser.add_argument('--noise_schedule', type=str, default='cosine')
     parser.add_argument('--snapshot_name', type=str, default='snapshot.pt')
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--noise_steps', type=int, default=200)
@@ -456,7 +468,6 @@ if __name__ == '__main__':
     parser.add_argument('--inp_out_channels', type=int, default=3) # input channels must be the same of the output channels
     parser.add_argument('--plot_gif_bool', type=bool, default=False)
     parser.add_argument('--magnification_factor', type=int, default=4)
-    parser.add_argument('--verbose', type=bool, default=False)
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
     launch(args)
