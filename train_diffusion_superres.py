@@ -280,7 +280,7 @@ class Diffusion:
                 x_t, noise = self.noise_images(hr_img, t) # get batch_size noise images
 
                 optimizer.zero_grad() # set the gradients to 0
-   
+
                 predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
 
                 train_loss = mse(predicted_noise, noise)
@@ -398,14 +398,17 @@ def launch(args):
     os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
 
     transform = transforms.Compose([
-    transforms.ToTensor(),
-    ])
+    transforms.Resize((image_size, image_size)),
+    ]) # The transforms.ToTensor() is in the get_data_superres function (in there
+    # first is applied this transform to y, then the resize according to the magnification_factor
+    # in order to get the x which is the lr_img and finally the to_tensor for both x
+    # and y is applied)
 
     train_path = f'{dataset_path}/train_original'
     valid_path = f'{dataset_path}/val_original'
 
-    train_dataset = get_data_superres(train_path, magnification_factor, 'torch', transform)
-    val_dataset = get_data_superres(valid_path, magnification_factor, 'torch', transform)
+    train_dataset = get_data_superres(train_path, magnification_factor, 'PIL', transform)
+    val_dataset = get_data_superres(valid_path, magnification_factor, 'PIL', transform)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)

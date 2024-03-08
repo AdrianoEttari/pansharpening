@@ -65,4 +65,6 @@ for x, y in train_loader:
     plt.imshow(y[0].permute(1,2,0).numpy())
     plt.show()
     break
+
+
 # %%

@@ -4,7 +4,7 @@ from PIL import Image
 import numpy as np
 import os
 from torchvision import transforms
-
+import shutil
 
 class get_data_superres(Dataset):
     '''
@@ -45,12 +45,30 @@ class get_data_superres(Dataset):
             y = torch.load(y_path)
             y = to_pil(y)
 
+        if self.transform:
+            y = self.transform(y)
+
         # Downsample the original image
         downsample = transforms.Resize((y.size[0] // self.magnification_factor, y.size[1] // self.magnification_factor))
         x = downsample(y)
 
-        if self.transform:
-            x = self.transform(x)
-            y = self.transform(y)
+        to_tensor = transforms.ToTensor()
+        x = to_tensor(x)
+        y = to_tensor(y)
 
         return x, y
+    
+def dataset_organizer(main_folder, destination_folder):
+    '''
+    This function moves all the files in the subfolders of main_folder to destination_folder. If there are no subfolders,
+    it will move the files in main_folder to destination_folder.
+    '''
+    os.makedirs(destination_folder, exist_ok=True)
+    # Iterate through each subfolder
+    for root, _, files in os.walk(main_folder):
+        if root != destination_folder:
+    # Move each file to the destination_folder 
+            for file in files:
+                source_path = os.path.join(root, file)
+                destination_path = os.path.join(destination_folder, file)
+                shutil.move(source_path, destination_path)

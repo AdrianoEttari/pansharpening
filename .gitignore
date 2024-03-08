@@ -167,5 +167,7 @@ CelebA/
 animal_imgs/
 
 # Files
-# *.png
+*.jpg
+*.jpeg
+*.png
 *.pdf
