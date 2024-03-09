@@ -96,6 +96,7 @@ class ConvBlock(nn.Module):
         # FIRST CONV
         h = self.conv1(x)
         # SUM THE X-SKIP IMAGE (x+upsampled_lr_img) WITH THE INPUT IMAGE
+        import ipdb; ipdb.set_trace()
         if x_skip is not None:
             h = h + x_skip
         # print(f"conv1_shape: {h.shape}")
@@ -209,6 +210,8 @@ class SimpleUNet_superres(nn.Module):
 
         self.LR_encoder = RRDB(in_channels=image_channels, out_channels=image_channels, num_blocks=3)
 
+        self.conv_upsampled_lr_img = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1)
+
         # DOWNSAMPLE
         self.downs = nn.ModuleList([
             ConvBlock(in_ch=self.down_channels[i],
@@ -279,13 +282,14 @@ class SimpleUNet_superres(nn.Module):
 
         # UPSAMPLE LR IMAGE
         upsampled_lr_img = F.interpolate(lr_img, scale_factor=magnification_factor, mode='bilinear')
-
+        # upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img) # TO CHECK. YOU HAVE ALSO TO CHANGE IN THE CONV BLOCK (OF DOWNSAMPLING)
+        
         # SUM THE UP SAMPLED LR IMAGE WITH THE INPUT IMAGE
         x = x + upsampled_lr_img
         x_skip = x.clone()
         # UNet
         residual_inputs = []
-
+        
         for i, down in enumerate(self.downs):
             # Downsample
             if i == 0:
@@ -305,7 +309,6 @@ class SimpleUNet_superres(nn.Module):
 if __name__=="__main__":
     model = SimpleUNet_superres(224, device='cpu')
     # print(f'This model has {sum(p.numel() for p in model.parameters())} parameters')
-
 
     def print_parameter_count(model):
         total_params = 0

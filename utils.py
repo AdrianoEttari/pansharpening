@@ -5,6 +5,8 @@ import numpy as np
 import os
 from torchvision import transforms
 import shutil
+import random
+from tqdm import tqdm
 
 class get_data_superres(Dataset):
     '''
@@ -58,17 +60,59 @@ class get_data_superres(Dataset):
 
         return x, y
     
-def dataset_organizer(main_folder, destination_folder):
-    '''
-    This function moves all the files in the subfolders of main_folder to destination_folder. If there are no subfolders,
-    it will move the files in main_folder to destination_folder.
-    '''
-    os.makedirs(destination_folder, exist_ok=True)
-    # Iterate through each subfolder
-    for root, _, files in os.walk(main_folder):
-        if root != destination_folder:
-    # Move each file to the destination_folder 
+class data_organizer():
+    def __init__(self, main_folder):
+        self.main_folder = main_folder
+        self.train_folder = os.path.join(main_folder, 'train_original')
+        self.val_folder = os.path.join(main_folder, 'val_original')
+        self.test_folder = os.path.join(main_folder, 'test_original')
+        os.makedirs(self.train_folder, exist_ok=True)
+        os.makedirs(self.val_folder, exist_ok=True)
+        os.makedirs(self.test_folder, exist_ok=True)
+
+    def check_subfolders(self):
+        for root, dirs, files in os.walk(self.main_folder):
+            if len(dirs) > 0:
+                return True
+            
+    def get_all_files_in_folder_and_subfolders(self, folder):
+        all_files = []
+        for root, dirs, files in os.walk(folder):
             for file in files:
-                source_path = os.path.join(root, file)
-                destination_path = os.path.join(destination_folder, file)
-                shutil.move(source_path, destination_path)
+                file_path = os.path.join(root, file)
+                all_files.append(file_path)
+        return all_files
+
+    def split_files(self, split_ratio=(0.8, 0.15, 0.05)):
+        if self.check_subfolders():
+            all_files = self.get_all_files_in_folder_and_subfolders(self.main_folder)
+        else:
+            all_files = [os.path.join(self.main_folder, file) for file in os.listdir(self.main_folder)]
+        # Get a list of all files in the input folder
+        random.shuffle(all_files)  # Shuffle the files randomly
+
+        # Calculate the number of files for each split
+        total_files = len(all_files)
+        train_size = int(total_files * split_ratio[0])
+        val_size = int(total_files * split_ratio[1])
+
+        # Assign files to the respective splits
+        train_files = all_files[:train_size]
+        val_files = all_files[train_size:train_size + val_size]
+        test_files = all_files[train_size + val_size:]
+
+        # Move files to the output folders
+        self.move_files(train_files, self.train_folder)
+        self.move_files(val_files, self.val_folder)
+        self.move_files(test_files, self.test_folder)
+
+    def move_files(self, files_full_path, destination_folder):
+        for file_full_path in tqdm(files_full_path,desc='Moving files'):
+            destination_path = os.path.join(destination_folder, os.path.basename(file_full_path))
+            shutil.move(file_full_path, destination_path)
+
+
+if __name__=="__main__":
+    main_folder = 'Humans_test'
+    data_organizer = data_organizer(main_folder)
+    data_organizer.split_files(split_ratio=(0.85,0.1,0.05))

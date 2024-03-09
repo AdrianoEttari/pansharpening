@@ -257,7 +257,6 @@ class Diffusion:
         best_loss = float('inf')  
 
         for epoch in range(epochs):
-            
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
@@ -272,6 +271,7 @@ class Diffusion:
             
             model.train()   
             for i,(lr_img,hr_img) in enumerate(pbar_train):
+                
                 lr_img = lr_img.to(self.device)
                 hr_img = hr_img.to(self.device)
 
