@@ -70,6 +70,7 @@ class ConvBlock(nn.Module):
                                             device=device),
                                   self.batch_norm1,
                                   self.relu)
+        self.conv_upsampled_lr_img = nn.Conv2d(in_ch, out_ch, 3, padding=1) ############# TO CHECK
         self.conv2 = nn.Sequential(
                                   nn.Conv2d(out_ch, out_ch,
                                             kernel_size=3, stride=1,
@@ -83,6 +84,7 @@ class ConvBlock(nn.Module):
                                             padding=1, bias=True,
                                             device=device))
         
+        
     def _make_te(self, dim_in, dim_out, device):
         return torch.nn.Sequential(
             torch.nn.Linear(dim_in, dim_out, device=device),
@@ -95,9 +97,9 @@ class ConvBlock(nn.Module):
         # print("[batch_size, channels, image_size[0], image_size[1]]")
         # FIRST CONV
         h = self.conv1(x)
-        # SUM THE X-SKIP IMAGE (x+upsampled_lr_img) WITH THE INPUT IMAGE
-        import ipdb; ipdb.set_trace()
+        # SUM THE X-SKIP IMAGE (x+upsampled_lr_img) WITH THE INPUT IMAGE\
         if x_skip is not None:
+            x_skip = self.conv_upsampled_lr_img(x_skip)
             h = h + x_skip
         # print(f"conv1_shape: {h.shape}")
         # TIME EMBEDDING
@@ -282,7 +284,7 @@ class SimpleUNet_superres(nn.Module):
 
         # UPSAMPLE LR IMAGE
         upsampled_lr_img = F.interpolate(lr_img, scale_factor=magnification_factor, mode='bilinear')
-        # upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img) # TO CHECK. YOU HAVE ALSO TO CHANGE IN THE CONV BLOCK (OF DOWNSAMPLING)
+        upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img) ############# TO CHECK
         
         # SUM THE UP SAMPLED LR IMAGE WITH THE INPUT IMAGE
         x = x + upsampled_lr_img
