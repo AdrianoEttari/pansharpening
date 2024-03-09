@@ -90,14 +90,14 @@ class ConvBlock(nn.Module):
             torch.nn.Linear(dim_out, dim_out, device=device)
         )
     
-    def forward(self, x, t, upsampled_lr_img):
+    def forward(self, x, t, x_skip):
         # print(f"DOWN\n x_shape: {x.shape}")
         # print("[batch_size, channels, image_size[0], image_size[1]]")
         # FIRST CONV
         h = self.conv1(x)
-        # SUM THE UP-SAMPLED LR IMAGE WITH THE INPUT IMAGE
-        if upsampled_lr_img is not None:
-            h = h + upsampled_lr_img
+        # SUM THE X-SKIP IMAGE (x+upsampled_lr_img) WITH THE INPUT IMAGE
+        if x_skip is not None:
+            h = h + x_skip
         # print(f"conv1_shape: {h.shape}")
         # TIME EMBEDDING
         time_emb = self.relu(self.time_mlp(t))
@@ -282,14 +282,14 @@ class SimpleUNet_superres(nn.Module):
 
         # SUM THE UP SAMPLED LR IMAGE WITH THE INPUT IMAGE
         x = x + upsampled_lr_img
-
+        x_skip = x.clone()
         # UNet
         residual_inputs = []
 
         for i, down in enumerate(self.downs):
             # Downsample
             if i == 0:
-                x = down(x, t, upsampled_lr_img)
+                x = down(x, t, x_skip)
             else:
                 x = down(x, t, None)
             residual_inputs.append(x)
