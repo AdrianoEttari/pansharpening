@@ -304,7 +304,7 @@ class Diffusion:
                     lr_img = val_loader.dataset[i][0]
                     hr_img = val_loader.dataset[i][1]
 
-                    superres_img = self.sample(n=1, lr_img=lr_img, input_channels=1, plot_gif_bool=False)
+                    superres_img = self.sample(n=1, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
 
                     axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
                     axs[i,0].set_title('Low resolution image')
@@ -439,7 +439,7 @@ def launch(args):
         lr_img = train_dataset[i][0]
         hr_img = train_dataset[i][1]
 
-        superres_img = diffusion.sample(n=1, lr_img=lr_img, input_channels=1, plot_gif_bool=plot_gif_bool)
+        superres_img = diffusion.sample(n=1, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=plot_gif_bool)
 
         axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
         axs[i,0].set_title('Low resolution image')

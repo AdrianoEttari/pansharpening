@@ -61,6 +61,10 @@ class get_data_superres(Dataset):
         return x, y
     
 class data_organizer():
+    '''
+    This class allows to organize the data in a folder into train, val and test folders.
+    Moreover, it is tailored for the super resolution problem.
+    '''
     def __init__(self, main_folder):
         self.main_folder = main_folder
         self.train_folder = os.path.join(main_folder, 'train_original')
@@ -69,13 +73,15 @@ class data_organizer():
         os.makedirs(self.train_folder, exist_ok=True)
         os.makedirs(self.val_folder, exist_ok=True)
         os.makedirs(self.test_folder, exist_ok=True)
-
-    def check_subfolders(self):
-        for root, dirs, files in os.walk(self.main_folder):
-            if len(dirs) > 0:
-                return True
             
     def get_all_files_in_folder_and_subfolders(self, folder):
+        '''
+        Input:
+            folder: path to the folder where the files and subfolders are stored.
+
+        Output:
+            all_files: list with the full path of all the files in the folder and its subfolders.
+        '''
         all_files = []
         for root, dirs, files in os.walk(folder):
             for file in files:
@@ -84,10 +90,15 @@ class data_organizer():
         return all_files
 
     def split_files(self, split_ratio=(0.8, 0.15, 0.05)):
-        if self.check_subfolders():
-            all_files = self.get_all_files_in_folder_and_subfolders(self.main_folder)
-        else:
-            all_files = [os.path.join(self.main_folder, file) for file in os.listdir(self.main_folder)]
+        '''
+        This function splits the files in the main folder into train, val and test folders.
+
+        Input:
+            split_ratio: tuple with the ratio of files that will be assigned to the train, val and test folders.
+        Output:
+            None
+        '''
+        all_files = self.get_all_files_in_folder_and_subfolders(self.main_folder)
         # Get a list of all files in the input folder
         random.shuffle(all_files)  # Shuffle the files randomly
 
@@ -107,6 +118,16 @@ class data_organizer():
         self.move_files(test_files, self.test_folder)
 
     def move_files(self, files_full_path, destination_folder):
+        '''
+        This function moves the files to the destination folder.
+
+        Input:
+            files_full_path: list with the full path of the files that will be moved.
+            destination_folder: path to the folder where the files will be moved.
+
+        Output:
+            None
+        '''
         for file_full_path in tqdm(files_full_path,desc='Moving files'):
             destination_path = os.path.join(destination_folder, os.path.basename(file_full_path))
             shutil.move(file_full_path, destination_path)
