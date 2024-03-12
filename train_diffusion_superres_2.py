@@ -12,6 +12,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
+import torch.nn.functional as F
 
 from UNet_model_superres import SimpleUNet_superres
 
@@ -255,7 +256,7 @@ class Diffusion:
 
         epochs_without_improving = 0
         best_loss = float('inf')  
-
+        
         for epoch in range(epochs):
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
@@ -274,10 +275,15 @@ class Diffusion:
                 
                 lr_img = lr_img.to(self.device)
                 hr_img = hr_img.to(self.device)
+                up_lr_img = F.interpolate(lr_img, scale_factor=self.magnification_factor, mode='bilinear').to(self.device)
 
-                t = self.sample_timesteps(hr_img.shape[0]).to(self.device)
+                residual_img = hr_img - up_lr_img # when permorming the difference, the resulting tensor may have
+                # values that are not in the range [0,1]. So, we need to rescale.
+                residual_img = (residual_img - residual_img.min()) / (residual_img.max() - residual_img.min())
+
+                t = self.sample_timesteps(residual_img.shape[0]).to(self.device)
                 # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size) with random integers from 1 to noise_steps.
-                x_t, noise = self.noise_images(hr_img, t) # get batch_size noise images
+                x_t, noise = self.noise_images(residual_img, t) # get batch_size noise images
 
                 optimizer.zero_grad() # set the gradients to 0
 
@@ -303,9 +309,9 @@ class Diffusion:
                 for i in range(5):
                     lr_img = val_loader.dataset[i][0]
                     hr_img = val_loader.dataset[i][1]
-
-                    superres_img = self.sample(n=1, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
-
+                    up_lr_img = F.interpolate(lr_img.unsqueeze(0), scale_factor=self.magnification_factor, mode='bilinear').to(self.device)
+                    superres_img = self.sample(n=1, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False) + up_lr_img
+                    superres_img = (superres_img - superres_img.min()) / (superres_img.max() - superres_img.min())
                     axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
                     axs[i,0].set_title('Low resolution image')
                     axs[i,1].imshow(hr_img.permute(1,2,0).cpu().numpy())
@@ -321,10 +327,12 @@ class Diffusion:
                     for (lr_img,hr_img) in pbar_val:
                         lr_img = lr_img.to(self.device)
                         hr_img = hr_img.to(self.device)
-
-                        t = self.sample_timesteps(hr_img.shape[0]).to(self.device)
+                        up_lr_img = F.interpolate(lr_img, scale_factor=self.magnification_factor, mode='bilinear').to(self.device)
+                        residual_img = hr_img - up_lr_img
+                        residual_img = (residual_img - residual_img.min()) / (residual_img.max() - residual_img.min())
+                        t = self.sample_timesteps(residual_img.shape[0]).to(self.device)
                         # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size)with random integers from 1 to noise_steps.
-                        x_t, noise = self.noise_images(hr_img, t) # get batch_size noise images
+                        x_t, noise = self.noise_images(residual_img, t) # get batch_size noise images
                         
                         predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
 
@@ -429,18 +437,18 @@ def launch(args):
         image_size=image_size, model_name=model_name)
 
     # Training 
-    # diffusion.train(
-    #     lr=lr, epochs=epochs, save_every=save_every,
-    #     train_loader=train_loader, val_loader=val_loader, patience=patience, verbose=True)
+    diffusion.train(
+        lr=lr, epochs=epochs, save_every=save_every,
+        train_loader=train_loader, val_loader=val_loader, patience=patience, verbose=True)
     
     # Sampling
     fig, axs = plt.subplots(5,3, figsize=(15,15))
     for i in range(5):
         lr_img = train_dataset[i][0]
         hr_img = train_dataset[i][1]
-
-        superres_img = diffusion.sample(n=1, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=plot_gif_bool)
-
+        up_lr_img = F.interpolate(lr_img.unsqueeze(0), scale_factor=magnification_factor, mode='bilinear').to(device)
+        superres_img = diffusion.sample(n=1, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=plot_gif_bool) + up_lr_img
+        superres_img = (superres_img - superres_img.min()) / (superres_img.max() - superres_img.min())
         axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
         axs[i,0].set_title('Low resolution image')
         axs[i,1].imshow(hr_img.permute(1,2,0).cpu().numpy())
