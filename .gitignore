@@ -165,6 +165,7 @@ MNIST_data_superres/
 Humans_test/
 CelebA/
 animal_imgs/
+other/
 
 # Files
 *.jpg
@@ -172,3 +173,5 @@ animal_imgs/
 *.png
 *.pdf
 .DS_Store
+*.pptx
+*.pt

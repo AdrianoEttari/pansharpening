@@ -429,9 +429,9 @@ def launch(args):
         image_size=image_size, model_name=model_name)
 
     # Training 
-    # diffusion.train(
-    #     lr=lr, epochs=epochs, save_every=save_every,
-    #     train_loader=train_loader, val_loader=val_loader, patience=patience, verbose=True)
+    diffusion.train(
+        lr=lr, epochs=epochs, save_every=save_every,
+        train_loader=train_loader, val_loader=val_loader, patience=patience, verbose=True)
     
     # Sampling
     fig, axs = plt.subplots(5,3, figsize=(15,15))

@@ -279,11 +279,9 @@ class SimpleUNet_superres(nn.Module):
         # INITIAL CONVOLUTION
         x = self.conv0(x)
 
-        # LR ENCODER
-        lr_img = self.LR_encoder(lr_img)
-
-        # UPSAMPLE LR IMAGE
+        # LR ENCODER & UPSAMPLE LR IMAGE
         upsampled_lr_img = F.interpolate(lr_img, scale_factor=magnification_factor, mode='bicubic')
+        upsampled_lr_img = self.LR_encoder(upsampled_lr_img)
         upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img) ############# TO CHECK
         
         # SUM THE UP SAMPLED LR IMAGE WITH THE INPUT IMAGE
