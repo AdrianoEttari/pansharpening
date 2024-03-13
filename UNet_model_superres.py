@@ -9,6 +9,52 @@ import torch.nn.functional as F
 # https://gist.github.com/shuuchen/6d39225b018d30ccc86ef10a4042b1aa
 # https://github.com/labmlai/annotated_deep_learning_paper_implementations/tree/05321d644e4fed67d8b2856adc2f8585e79dfbee/labml_nn/diffusion/ddpm
 # https://www.kaggle.com/code/truthisneverlinear/attention-u-net-pytorch
+
+class EMA:
+    def __init__(self, beta):
+        super().__init__()
+        self.beta = beta    # set the beta parameter for the exponential moving average
+        self.step = 0       # step counter (initialized at 0) to track when to start updating the moving average
+
+    def update_model_average(self, ma_model, current_model):
+        for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()): #iterate over all parameters in the current and moving average models
+            # get the old and new weights for the current and moving average models
+            old_weight, up_weight = ma_params.data, current_params.data
+            # update the moving average model parameter
+            ma_params.data = self.update_average(old_weight, up_weight)
+
+    def update_average(self, old, new):
+        # if there is no old weight, return the new weight
+        if old is None:
+            return new
+        # compute the weighted average of the old and new weights using the beta parameter
+        return old * self.beta + (1 - self.beta) * new # beta is usually around 0.99
+        # therefore the new weights influence the ma parameters only a little bit
+        # (which prevents outliers to have a big effect) whereas the old weights
+        # are more important.
+
+    def step_ema(self, ema_model, model, step_start_ema=2000):
+        '''
+        We'll let the EMA update start just after a certain number of iterations
+        (step_start_ema) to give the main model a quick warmup. During the warmup
+        we'll just reset the EMA parameters to the main model one.
+        After the warmup we'll then always update the weights by iterating over all
+        parameters and apply the update_average function.
+        '''
+        # if we are still in the warmup phase, reset the moving average model to the current model
+        if self.step < step_start_ema:
+            self.reset_parameters(ema_model, model)
+            self.step += 1
+            return
+        # otherwise update the moving average model parameters using the current model parameters
+        self.update_model_average(ema_model, model)
+        self.step += 1
+
+    def reset_parameters(self, ema_model, model):
+        # reset the parameters of the moving average model to the current model parameters
+        ema_model.load_state_dict(model.state_dict()) # we set the weights of ema_model
+        # to the ones of model.
+
 class AttentionBlock(nn.Module):
     def __init__(self, f_g, f_l, f_int, device):
         '''

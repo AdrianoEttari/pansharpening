@@ -12,8 +12,9 @@ import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
+import copy
 
-from UNet_model_superres import SimpleUNet_superres
+from UNet_model_superres import SimpleUNet_superres, EMA
 
 class Diffusion:
     def __init__(
@@ -137,7 +138,7 @@ class Diffusion:
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
     
-    def sample(self, n, lr_img, input_channels=3, plot_gif_bool=False):
+    def sample(self, n, model, lr_img, input_channels=3, plot_gif_bool=False):
         '''
         As the name suggests this function is used for sampling. Therefore we want to 
         loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY).
@@ -153,7 +154,6 @@ class Diffusion:
         Output:
             x: a tensor of shape (n, input_channels, self.image_size, self.image_size) with the generated images
         '''
-        model = self.model
         lr_img = lr_img.to(self.device).unsqueeze(0)
 
         frames = []
@@ -193,19 +193,20 @@ class Diffusion:
         x = (x * 255).type(torch.uint8)
         return x
 
-    def _save_snapshot(self, epoch):
+    def _save_snapshot(self, epoch, model):
         '''
         This function saves the model state, the optimizer state and the current epoch.
         It is a mandatory function in order to be fault tolerant.
 
         Input:
             epoch: the current epoch
+            model: the model to save
 
         Output:
             None
         '''
         snapshot = {
-            "MODEL_STATE": self.model.state_dict(),
+            "MODEL_STATE": model.state_dict(),
             "EPOCHS_RUN": epoch,
         }
         torch.save(snapshot, self.snapshot_path)
@@ -222,17 +223,17 @@ class Diffusion:
         self.epochs_run = snapshot["EPOCHS_RUN"]
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
-    def early_stopping(self, epoch, patience, epochs_without_improving):
+    def early_stopping(self, epoch, model, patience, epochs_without_improving):
         '''
         This function checks if the validation loss is increasing. If it is for more than patience times, then it returns True (that will correspond to breaking the training loop)
         and saves the weights of the model.
         '''
         if epochs_without_improving >= patience:
             print('Early stopping! Training stopped')
-            self._save_snapshot(epoch)
+            self._save_snapshot(epoch, model)
             return True
 
-    def train(self, lr, epochs, save_every, train_loader, val_loader, patience, verbose):
+    def train(self, lr, epochs, save_every, train_loader, val_loader, patience, loss, verbose):
         '''
         This function performs the training of the model, saves the snapshots and the model at the end of the training each self.every_n_epochs epochs.
 
@@ -243,6 +244,7 @@ class Diffusion:
             train_loader: the training loader
             val_loader: the validation loader
             patience: the number of epochs after which the training will be stopped if the validation loss is increasing
+            loss: the loss function to use
             verbose: if True, the function will use the tqdm during the training and the validation
         '''
         model = self.model
@@ -251,7 +253,15 @@ class Diffusion:
         # Basically, weight decay is a regularization technique that penalizes large weights. It's a way to prevent overfitting. In AdamW, 
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
-        mse = nn.MSELoss()
+        ema = EMA(beta=0.995)
+        ema_model = copy.deepcopy(model).eval().requires_grad_(False)
+
+        if loss == 'MSE':
+            loss_function = nn.MSELoss()
+        elif loss == 'MAE':
+            loss_function = nn.L1Loss()
+        elif loss == 'Huber':
+            loss_function = nn.HuberLoss() 
 
         epochs_without_improving = 0
         best_loss = float('inf')  
@@ -283,41 +293,46 @@ class Diffusion:
 
                 predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
 
-                train_loss = mse(predicted_noise, noise)
+                train_loss = loss_function(predicted_noise, noise)
                 train_loss.backward() # compute the gradients
                 optimizer.step() # update the weights
+                ema.step_ema(ema_model, model)
                 
                 if verbose:
-                    pbar_train.set_postfix(MSE_LOSS=train_loss.item()) # set_postfix just adds a message or value displayed after the progress bar. In this case the loss of the current batch.
+                    pbar_train.set_postfix(LOSS=train_loss.item()) # set_postfix just adds a message or value displayed after the progress bar. In this case the loss of the current batch.
             
                 running_train_loss += train_loss.item()
             
             scheduler.step()
 
             running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
-            print(f"Epoch {epoch}: Running Train loss (MSE) {running_train_loss}")
+            print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
             if epoch % save_every == 0:
-                self._save_snapshot(epoch)
-                fig, axs = plt.subplots(5,3, figsize=(15,15))
+                self._save_snapshot(epoch, ema_model)
+                fig, axs = plt.subplots(5,4, figsize=(15,15))
                 for i in range(5):
                     lr_img = val_loader.dataset[i][0]
                     hr_img = val_loader.dataset[i][1]
 
-                    superres_img = self.sample(n=1, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
+                    superres_img = self.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
+                    superres_img_ema = self.sample(n=1,model=ema_model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
 
                     axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
                     axs[i,0].set_title('Low resolution image')
                     axs[i,1].imshow(hr_img.permute(1,2,0).cpu().numpy())
                     axs[i,1].set_title('High resolution image')
                     axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
-                    axs[i,2].set_title('Super resolution image')
+                    axs[i,2].set_title('Super resolution image (model)')
+                    axs[i,3].imshow(superres_img_ema[0].permute(1,2,0).cpu().numpy())
+                    axs[i,3].set_title('Super resolution image (EMA model)')
 
                 plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
 
             if val_loader is not None:
                 with torch.no_grad():
                     model.eval()
+                    
                     for (lr_img,hr_img) in pbar_val:
                         lr_img = lr_img.to(self.device)
                         hr_img = hr_img.to(self.device)
@@ -326,18 +341,18 @@ class Diffusion:
                         # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size)with random integers from 1 to noise_steps.
                         x_t, noise = self.noise_images(hr_img, t) # get batch_size noise images
                         
-                        predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
+                        predicted_noise = ema_model(x_t, t, lr_img, self.magnification_factor) 
 
-                        val_loss = mse(predicted_noise, noise)
+                        val_loss = loss_function(predicted_noise, noise)
 
                         if verbose:
-                            pbar_val.set_postfix(MSE_LOSS=val_loss.item()) # set_postfix just adds a message or value
+                            pbar_val.set_postfix(LOSS=val_loss.item()) # set_postfix just adds a message or value
                         # displayed after the progress bar. In this case the loss of the current batch.
 
                         running_val_loss += val_loss.item()
 
                     running_val_loss /= len(val_loader.dataset)
-                    print(f"Epoch {epoch}: Running Val loss (MSE){running_val_loss}")
+                    print(f"Epoch {epoch}: Running Val loss ({loss}){running_val_loss}")
 
 
             if val_loader is not None:
@@ -347,7 +362,7 @@ class Diffusion:
                 else:
                     epochs_without_improving += 1
 
-                if self.early_stopping(epoch, patience, epochs_without_improving):
+                if self.early_stopping(epoch, ema_model, patience, epochs_without_improving):
                     break
 
 def launch(args):
@@ -372,6 +387,7 @@ def launch(args):
         output_channels: the number of output channels
         plot_gif_bool: if True, the function will plot a gif with the generated images for each class
         magnification_factor: the magnification factor (i.e. the factor by which the image is magnified in the super-resolution task)
+        loss: the loss function to use
 
     Output:
         None
@@ -392,6 +408,7 @@ def launch(args):
     input_channels, output_channels = args.inp_out_channels, args.inp_out_channels
     plot_gif_bool = args.plot_gif_bool
     magnification_factor = args.magnification_factor
+    loss = args.loss
     
 
     os.makedirs(snapshot_folder_path, exist_ok=True)
@@ -431,15 +448,16 @@ def launch(args):
     # Training 
     diffusion.train(
         lr=lr, epochs=epochs, save_every=save_every,
-        train_loader=train_loader, val_loader=val_loader, patience=patience, verbose=True)
+        train_loader=train_loader, val_loader=val_loader, patience=patience, loss=loss, verbose=True)
     
     # Sampling
+    # Notice that the sampling is made with the EMA model because we just save the weights of the EMA model
     fig, axs = plt.subplots(5,3, figsize=(15,15))
     for i in range(5):
         lr_img = train_dataset[i][0]
         hr_img = train_dataset[i][1]
 
-        superres_img = diffusion.sample(n=1, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=plot_gif_bool)
+        superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=plot_gif_bool)
 
         axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
         axs[i,0].set_title('Low resolution image')
@@ -470,6 +488,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_path', type=str, default=None)
     parser.add_argument('--inp_out_channels', type=int, default=3) # input channels must be the same of the output channels
     parser.add_argument('--plot_gif_bool', type=bool, default=False)
+    parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int, default=4)
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
