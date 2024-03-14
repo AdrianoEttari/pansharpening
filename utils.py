@@ -51,7 +51,8 @@ class get_data_superres(Dataset):
             y = self.transform(y)
 
         # Downsample the original image
-        downsample = transforms.Resize((y.size[0] // self.magnification_factor, y.size[1] // self.magnification_factor))
+        downsample = transforms.Resize((y.size[0] // self.magnification_factor, y.size[1] // self.magnification_factor),
+                                       interpolation=transforms.InterpolationMode.BICUBIC)
         x = downsample(y)
 
         to_tensor = transforms.ToTensor()
