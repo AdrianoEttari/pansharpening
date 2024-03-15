@@ -15,6 +15,58 @@ from utils import get_data_superres
 import copy
 
 from UNet_model_superres import SimpleUNet_superres, EMA
+import torch
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
+import torch.nn.functional as F
+
+
+class VGGPerceptualLoss(nn.Module):
+    def __init__(self):
+        super(VGGPerceptualLoss, self).__init__()
+        self.vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features
+        self.vgg.eval()  # Set VGG to evaluation mode
+
+        # Freeze all VGG parameters
+        for param in self.vgg.parameters():
+            param.requires_grad = False
+
+    def preprocess_image(self, image):
+        '''
+        The VGG network wants input sized (224,224), normalized and as pytorch tensor. 
+        '''
+        transform = transforms.Compose([
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        
+        if image.shape[-1] != 224:
+            image = F.interpolate(image, size=(224, 224), mode='bicubic', align_corners=False)
+        
+        return transform(image)
+
+    def forward(self, x, y):
+        x = self.preprocess_image(x)
+        y = self.preprocess_image(y)
+
+        x_features = self.vgg(x)
+        y_features = self.vgg(y)
+
+        return torch.mean((x_features-y_features)**2)
+
+class CombinedLoss(nn.Module):
+    def __init__(self, first_loss, second_loss, weight_first=0.5):
+        super(CombinedLoss, self).__init__()
+        self.first_loss = first_loss
+        self.second_loss = second_loss
+        self.weight_first = weight_first  
+
+    def forward(self, predicted, target):
+        first_loss_value = self.first_loss(predicted, target)
+        second_loss_value = self.second_loss(predicted, target)
+        combined_loss = self.weight_first * first_loss_value + (1-self.weight_first) * second_loss_value
+        return combined_loss
+
 
 class Diffusion:
     def __init__(
@@ -263,7 +315,11 @@ class Diffusion:
             loss_function = nn.L1Loss()
         elif loss == 'Huber':
             loss_function = nn.HuberLoss() 
-
+        elif loss == 'MSE+Perceptual':
+            vgg_loss = VGGPerceptualLoss()
+            mse_loss = nn.MSELoss()
+            loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.7)
+        
         epochs_without_improving = 0
         best_loss = float('inf')  
 
@@ -295,6 +351,7 @@ class Diffusion:
                 predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
 
                 train_loss = loss_function(predicted_noise, noise)
+                
                 train_loss.backward() # compute the gradients
                 optimizer.step() # update the weights
                 ema.step_ema(ema_model, model)
