@@ -23,9 +23,10 @@ import torch.nn.functional as F
 
 
 class VGGPerceptualLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, device):
         super(VGGPerceptualLoss, self).__init__()
         self.vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features
+        self.vgg.to(device)
         self.vgg.eval()  # Set VGG to evaluation mode
 
         # Freeze all VGG parameters
@@ -316,7 +317,7 @@ class Diffusion:
         elif loss == 'Huber':
             loss_function = nn.HuberLoss() 
         elif loss == 'MSE+Perceptual':
-            vgg_loss = VGGPerceptualLoss()
+            vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
             loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.7)
         
