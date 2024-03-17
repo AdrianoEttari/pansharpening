@@ -25,8 +25,8 @@ import torch.nn.functional as F
 class VGGPerceptualLoss(nn.Module):
     def __init__(self, device):
         super(VGGPerceptualLoss, self).__init__()
-        self.vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features
-        self.vgg = nn.Sequential(*[self.vgg[i] for i in range(16)]) 
+        self.vgg = models.vgg16(weights=models.VGG16_Weights.DEFAULT).features
+        self.vgg = nn.Sequential(*[self.vgg[i] for i in range(8)]) 
         self.vgg.to(device)
         self.vgg.eval()  # Set VGG to evaluation mode
 
@@ -302,7 +302,8 @@ class Diffusion:
         '''
         model = self.model
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        # optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
         # Basically, weight decay is a regularization technique that penalizes large weights. It's a way to prevent overfitting. In AdamW, 
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
