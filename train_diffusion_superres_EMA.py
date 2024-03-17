@@ -26,13 +26,14 @@ class VGGPerceptualLoss(nn.Module):
     def __init__(self, device):
         super(VGGPerceptualLoss, self).__init__()
         self.vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features
+        self.vgg = nn.Sequential(*[self.vgg[i] for i in range(16)]) 
         self.vgg.to(device)
         self.vgg.eval()  # Set VGG to evaluation mode
 
         # Freeze all VGG parameters
         for param in self.vgg.parameters():
             param.requires_grad = False
-
+        
     def preprocess_image(self, image):
         '''
         The VGG network wants input sized (224,224), normalized and as pytorch tensor. 
@@ -67,7 +68,6 @@ class CombinedLoss(nn.Module):
         second_loss_value = self.second_loss(predicted, target)
         combined_loss = self.weight_first * first_loss_value + (1-self.weight_first) * second_loss_value
         return combined_loss
-
 
 class Diffusion:
     def __init__(
@@ -319,7 +319,7 @@ class Diffusion:
         elif loss == 'MSE+Perceptual':
             vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
-            loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.7)
+            loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.5)
         
         epochs_without_improving = 0
         best_loss = float('inf')  
