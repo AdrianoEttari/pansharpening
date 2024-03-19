@@ -257,8 +257,7 @@ class Diffusion:
                     noise = torch.zeros_like(x) # we don't add noise (it's equal to 0) in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
                 if plot_gif_bool == True:
-                    plt.imshow(x[0][0].cpu().numpy(), cmap='gray')
-                    
+                    plt.imshow(x[0][0].cpu().numpy())
                     plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png'))
                     plt.title(f't-step={i}', fontsize=30)
                     frames.append(imageio.imread(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png')))

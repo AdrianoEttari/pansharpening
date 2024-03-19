@@ -3,6 +3,7 @@ import torch
 from train_diffusion_superres_EMA import Diffusion
 from torchvision import transforms
 from utils import get_data_superres
+from torch.utils.data import DataLoader
 
 image_size = 224
 input_channels = output_channels = 3
@@ -26,7 +27,7 @@ test_path = f'{dataset_path}/test_original'
 train_dataset = get_data_superres(train_path, magnification_factor, 'PIL', transform)
 val_dataset = get_data_superres(valid_path, magnification_factor, 'PIL', transform)
 test_dataset = get_data_superres(test_path, magnification_factor, 'PIL', transform)
-
+#%%
 width = train_dataset[0][1].shape[1]
 
 from UNet_model_superres import SimpleUNet_superres
