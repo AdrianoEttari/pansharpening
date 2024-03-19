@@ -329,7 +329,10 @@ class SimpleUNet_superres(nn.Module):
         lr_img = self.LR_encoder(lr_img)
 
         # UPSAMPLE LR IMAGE
-        upsampled_lr_img = F.interpolate(lr_img, scale_factor=magnification_factor, mode='bicubic')
+        try:
+            upsampled_lr_img = F.interpolate(lr_img, scale_factor=magnification_factor, mode='bicubic')
+        except:
+            upsampled_lr_img = F.interpolate(lr_img.to('cpu'), scale_factor=magnification_factor, mode='nearest').to(self.device)
 
         # CONCATENATE THE UP SAMPLED LR IMAGE WITH THE NOISED HR IMAGE
         x_concat = torch.cat((x, upsampled_lr_img), dim=1)

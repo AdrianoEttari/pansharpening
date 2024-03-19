@@ -51,9 +51,13 @@ class get_data_superres(Dataset):
             y = self.transform(y)
 
         # Downsample the original image
+        
         downsample = transforms.Resize((y.size[0] // self.magnification_factor, y.size[1] // self.magnification_factor),
                                        interpolation=transforms.InterpolationMode.BICUBIC)
-        x = downsample(y)
+        try:
+            x = downsample(y)
+        except:
+            x = downsample(y.to('cpu')).to(y.device)
 
         to_tensor = transforms.ToTensor()
         x = to_tensor(x)

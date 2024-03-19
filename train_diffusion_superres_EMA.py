@@ -32,7 +32,7 @@ class VGGPerceptualLoss(nn.Module):
         # self.vgg = nn.Sequential(*[self.vgg[i] for i in range(8)]) 
         self.vgg.to(device)
         self.vgg.eval()  # Set VGG to evaluation mode
-
+        self.device = device
         # Freeze all VGG parameters
         for param in self.vgg.parameters():
             param.requires_grad = False
@@ -46,7 +46,10 @@ class VGGPerceptualLoss(nn.Module):
             ])
         
         if image.shape[-1] != 224:
-            image = F.interpolate(image, size=(224, 224), mode='bicubic', align_corners=False)
+            try:
+                image = F.interpolate(image, size=(224, 224), mode='bicubic', align_corners=False)
+            except:
+                image = F.interpolate(image.to('cpu'), size=(224, 224), mode='bicubic', align_corners=False).to(self.device)
         
         return transform(image)
     
@@ -179,7 +182,7 @@ class Diffusion:
 
     def noise_images(self, x, t):
         '''
-        ATTENTION: The error Ɛ is random, but how much of it we add to move forward depends on the Beta schedule.
+        ATTENTION: The error epsilon is random, but how much of it we add to move forward depends on the Beta schedule.
 
         Input:
             x: the image at time t=0
@@ -187,16 +190,16 @@ class Diffusion:
         
         Output:
             x_t: the image at the current timestep (x_t)
-            Ɛ: the error that we add to x_t to move forward
+            epsilon: the error that we add to x_t to move forward
         '''
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None] # Each None is a new dimension (e.g.
         # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)). It doens't add
         # them exatly in the same place, but it adds them in the place where the None is.
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
-        Ɛ = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
+        epsilon = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
-        Ɛ = 2 * (Ɛ - Ɛ.min()) / (Ɛ.max() - Ɛ.min()) - 1
-        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * Ɛ, Ɛ
+        # epsilon = 2 * (epsilon - epsilon.min()) / (epsilon.max() - epsilon.min()) - 1
+        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, epsilon
 
     def sample_timesteps(self, n):
         '''
@@ -235,7 +238,7 @@ class Diffusion:
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
             x = torch.randn((n, input_channels, self.image_size, self.image_size))
-            x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
+            # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
@@ -254,20 +257,20 @@ class Diffusion:
                     noise = torch.zeros_like(x) # we don't add noise (it's equal to 0) in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
                 if plot_gif_bool == True:
-                    os.makedirs(f'{os.getcwd()}/gif_result', exist_ok=True)
                     plt.imshow(x[0][0].cpu().numpy(), cmap='gray')
-                    plt.savefig(f'{os.getcwd()}/gif_result/frame_{i}.png')
+                    
+                    plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png'))
                     plt.title(f't-step={i}', fontsize=30)
-                    frames.append(imageio.imread(f'{os.getcwd()}/gif_result/frame_{i}.png'))
-                    os.remove(f'{os.getcwd()}/gif_result/frame_{i}.png')
+                    frames.append(imageio.imread(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png')))
+                    os.remove(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png'))
         if plot_gif_bool == True:
-            imageio.mimsave(os.path.join(f'{os.getcwd()}/gif_result',f'gif_{self.model_name}.gif'), frames, duration=0.25) 
+            imageio.mimsave(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'gif_result.gif'), frames, duration=0.25) 
         model.train() # enables dropout and batch normalization
-        x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
+        # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
         # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 
         # otherwise outputs them. The same (but opposit reasoning) for the maximum.
         # +1 and /2 just to bring the values back to 0 to 1.
-        x = (x * 255).type(torch.uint8)
+        # x = (x * 255).type(torch.uint8)
         return x
 
     def _save_snapshot(self, epoch, model):
@@ -344,7 +347,7 @@ class Diffusion:
         elif loss == 'MSE+Perceptual_noise':
             vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
-            loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.2)
+            loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.3)
         elif loss == 'MSE+Perceptual_imgs':
             vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
