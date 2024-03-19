@@ -14,8 +14,8 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
 import copy
 
-# from UNet_model_superres import SimpleUNet_superres, EMA
-from UNet_model_superres_concat import SimpleUNet_superres, EMA
+from UNet_model_superres import SimpleUNet_superres, EMA
+# from UNet_model_superres_concat import SimpleUNet_superres, EMA
 import torch
 import torch.nn as nn
 import torchvision.models as models
@@ -79,13 +79,16 @@ class CombinedLoss_MSE_PercLoss(nn.Module):
         self.Perc_loss = Perc_loss
         self.weight_MSE_loss = weight_MSE_loss
 
-    def forward(self, predicted_noise, target_noise, hr_img, hr_img_noised, alpha_hat_t):
+    def forward(self, predicted_noise, target_noise, hr_img, hr_img_noised, alpha_hat_t, epoch):
         alpha_hat_t = alpha_hat_t[:, None, None, None]
         MSE_loss_value = self.MSE_loss(predicted_noise, target_noise)
-        hr_img_denoised = (hr_img_noised - torch.sqrt(1-alpha_hat_t)*predicted_noise)/torch.sqrt(alpha_hat_t)
-        Perc_loss_value = self.Perc_loss(hr_img_denoised, hr_img)
-        combined_loss = self.weight_MSE_loss * MSE_loss_value + (1-self.weight_MSE_loss) * Perc_loss_value
-        return combined_loss
+        if epoch > 50:
+            hr_img_denoised = (hr_img_noised - torch.sqrt(1-alpha_hat_t)*predicted_noise)/torch.sqrt(alpha_hat_t)
+            Perc_loss_value = self.Perc_loss(hr_img_denoised, hr_img)
+            combined_loss = self.weight_MSE_loss * MSE_loss_value + (1-self.weight_MSE_loss) * Perc_loss_value
+            return combined_loss
+        else:
+            return MSE_loss_value
 
 class Diffusion:
     def __init__(
@@ -192,6 +195,7 @@ class Diffusion:
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
         Ɛ = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
+        Ɛ = 2 * (Ɛ - Ɛ.min()) / (Ɛ.max() - Ɛ.min()) - 1
         return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * Ɛ, Ɛ
 
     def sample_timesteps(self, n):
@@ -230,7 +234,9 @@ class Diffusion:
         frames = []
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
-            x = torch.randn((n, input_channels, self.image_size, self.image_size)).to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
+            x = torch.randn((n, input_channels, self.image_size, self.image_size))
+            x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
+            x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
                 # Basically, each of the n image will be processed with the same integer time step t.
@@ -342,7 +348,7 @@ class Diffusion:
         elif loss == 'MSE+Perceptual_imgs':
             vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
-            loss_function = CombinedLoss_MSE_PercLoss(MSE_loss=mse_loss, Perc_loss=vgg_loss, weight_MSE_loss=0.5)
+            loss_function = CombinedLoss_MSE_PercLoss(MSE_loss=mse_loss, Perc_loss=vgg_loss, weight_MSE_loss=0.3)
         
         epochs_without_improving = 0
         best_loss = float('inf')  
@@ -377,7 +383,7 @@ class Diffusion:
                 if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
                     train_loss = loss_function(predicted_noise, noise)
                 elif loss == 'MSE+Perceptual_imgs':
-                    train_loss = loss_function(predicted_noise, noise, hr_img, x_t, self.alpha_hat[t])
+                    train_loss = loss_function(predicted_noise, noise, hr_img, x_t, self.alpha_hat[t], epoch)
                 
                 train_loss.backward() # compute the gradients
                 optimizer.step() # update the weights
@@ -431,7 +437,7 @@ class Diffusion:
                         if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
                             val_loss = loss_function(predicted_noise, noise)
                         elif loss == 'MSE+Perceptual_imgs':    
-                            val_loss = loss_function(predicted_noise, noise, hr_img, x_t, self.alpha_hat[t])
+                            val_loss = loss_function(predicted_noise, noise, hr_img, x_t, self.alpha_hat[t], epoch)
 
                         if verbose:
                             pbar_val.set_postfix(LOSS=val_loss.item()) # set_postfix just adds a message or value
@@ -556,8 +562,6 @@ def launch(args):
         axs[i,2].set_title('Super resolution image')
 
     plt.savefig(os.path.join(os.getcwd(), 'models_run', model_name, 'results', 'superres_results.png'))
-
-    
 
 
 if __name__ == '__main__':

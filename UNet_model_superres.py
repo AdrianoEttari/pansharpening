@@ -108,7 +108,7 @@ class ConvBlock(nn.Module):
         self.time_mlp =  self._make_te(time_emb_dim, out_ch, device=device)
         self.batch_norm1 = nn.BatchNorm2d(out_ch, device=device)
         self.batch_norm2 = nn.BatchNorm2d(out_ch, device=device)
-        self.relu = nn.ReLU(inplace=False) # inplace=False MEANS THAT IT WILL MODIFY THE INPUT DIRECTLY, WITHOUT ASSIGNING IT TO A NEW VARIABLE (THIS SAVES SPACE IN MEMORY, BUT IT MODIFIES THE INPUT)
+        self.relu = nn.ReLU(inplace=False) # inplace=True MEANS THAT IT WILL MODIFY THE INPUT DIRECTLY, WITHOUT ASSIGNING IT TO A NEW VARIABLE (THIS SAVES SPACE IN MEMORY, BUT IT MODIFIES THE INPUT)
         self.conv1 = nn.Sequential(
                                   nn.Conv2d(in_ch, out_ch,
                                             kernel_size=3, stride=1,
@@ -132,6 +132,9 @@ class ConvBlock(nn.Module):
         
         
     def _make_te(self, dim_in, dim_out, device):
+        '''
+        This function creates a time embedding layer.
+        '''
         return torch.nn.Sequential(
             torch.nn.Linear(dim_in, dim_out, device=device),
             torch.nn.SiLU(),
@@ -254,7 +257,7 @@ class SimpleUNet_superres(nn.Module):
 
         # INITIAL PROJECTION
         # print(f"Initial\nin_channels: {self.image_channels}, out_channels: {self.down_channels[0]}, kernel_size: 3")
-        self.conv0 = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1) # SINCE THERE IS PADDING 1, THE OUTPUT IS THE SAME SIZE OF THE INPUT
+        self.conv0 = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1) # SINCE THERE IS PADDING 1 AND STRIDE 1,  THE OUTPUT IS THE SAME SIZE OF THE INPUT
 
         self.LR_encoder = RRDB(in_channels=image_channels, out_channels=image_channels, num_blocks=3)
 
@@ -293,7 +296,7 @@ class SimpleUNet_superres(nn.Module):
 
     def convolution_output_size(self, input_size, stride, padding, kernel_size):
         '''
-        This function returns the space dimensions of the output of the convolutional layer (it's
+        This function returns the spatial dimensions of the output of the convolutional layer (it's
         the same for the width and the height). It depends by the space dimensions of the input (input_size),
         the stride, the padding and the kernel_size.
         '''
