@@ -332,7 +332,7 @@ class Diffusion:
         # optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
         # Basically, weight decay is a regularization technique that penalizes large weights. It's a way to prevent overfitting. In AdamW, 
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
+        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
         ema = EMA(beta=0.995)
         ema_model = copy.deepcopy(model).eval().requires_grad_(False)
@@ -396,7 +396,7 @@ class Diffusion:
             
                 running_train_loss += train_loss.item()
             
-            scheduler.step()
+            # scheduler.step()
 
             running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")

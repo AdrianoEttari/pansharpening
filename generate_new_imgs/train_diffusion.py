@@ -193,11 +193,11 @@ class Diffusion:
         if plot_gif_bool == True:
             imageio.mimsave(os.path.join(f'{os.getcwd()}/gif_result',f'gif_{self.model_name}_{target_class}.gif'), frames, duration=0.25) 
         model.train() # enables dropout and batch normalization
-        x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
+        # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
         # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 
         # otherwise outputs them. The same (but opposit reasoning) for the maximum.
         # +1 and /2 just to bring the values back to 0 to 1.
-        x = (x * 255).type(torch.uint8)
+        # x = (x * 255).type(torch.uint8)
         return x
 
     def _save_snapshot(self, epoch):
