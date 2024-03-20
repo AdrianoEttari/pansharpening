@@ -331,14 +331,17 @@ class SimpleUNet_superres(nn.Module):
         # LR ENCODER
         lr_img = self.LR_encoder(lr_img)
 
+        
         # UPSAMPLE LR IMAGE
         try:
             upsampled_lr_img = F.interpolate(lr_img, scale_factor=magnification_factor, mode='bicubic')
         except:
-            upsampled_lr_img = F.interpolate(lr_img.to('cpu'), scale_factor=magnification_factor, mode='bilinear').to(self.device)
+            upsampled_lr_img = F.interpolate(lr_img.to('cpu'), scale_factor=magnification_factor, mode='bicubic').to(self.device)
+
         upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img) ############# TO CHECK
         
         # SUM THE UP SAMPLED LR IMAGE WITH THE INPUT IMAGE
+        
         x = x + upsampled_lr_img
         x_skip = x.clone()
         # UNet
