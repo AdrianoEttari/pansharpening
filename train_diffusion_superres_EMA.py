@@ -49,7 +49,7 @@ class VGGPerceptualLoss(nn.Module):
             try:
                 image = F.interpolate(image, size=(224, 224), mode='bicubic', align_corners=False)
             except:
-                image = F.interpolate(image.to('cpu'), size=(224, 224), mode='bicubic', align_corners=False).to(self.device)
+                image = F.interpolate(image.to('cpu'),  size=(224, 224), mode='bicubic', align_corners=False).to(self.device)
         
         return transform(image)
     
@@ -507,7 +507,9 @@ def launch(args):
     magnification_factor = args.magnification_factor
     loss = args.loss
     
-
+    if image_size % magnification_factor != 0:
+        raise ValueError('The image size must be a multiple of the magnification factor')
+    
     os.makedirs(snapshot_folder_path, exist_ok=True)
     os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
 
