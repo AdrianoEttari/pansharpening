@@ -362,7 +362,6 @@ class SimpleUNet_superres(nn.Module):
         return self.output(x)
 
 
-
 if __name__=="__main__":
     model = SimpleUNet_superres(224, device='cpu')
     # print(f'This model has {sum(p.numel() for p in model.parameters())} parameters')
