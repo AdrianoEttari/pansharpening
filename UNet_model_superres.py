@@ -116,7 +116,7 @@ class ConvBlock(nn.Module):
                                             device=device),
                                   self.batch_norm1,
                                   self.relu)
-        self.conv_upsampled_lr_img = nn.Conv2d(in_ch, out_ch, 3, padding=1) ############# TO CHECK
+        self.conv_upsampled_lr_img = nn.Conv2d(in_ch, out_ch, 3, padding=1)
         self.conv2 = nn.Sequential(
                                   nn.Conv2d(out_ch, out_ch,
                                             kernel_size=3, stride=1,
@@ -124,13 +124,11 @@ class ConvBlock(nn.Module):
                                             device=device),
                                   self.batch_norm2,
                                   self.relu)
-        self.transform = nn.Sequential(
-                                  nn.Conv2d(out_ch, out_ch,
+        self.transform = nn.Conv2d(out_ch, out_ch,
                                             kernel_size=kernel_size_down, stride=2,
                                             padding=1, bias=True,
-                                            device=device))
-        
-        
+                                            device=device)
+            
     def _make_te(self, dim_in, dim_out, device):
         '''
         This function creates a time embedding layer.
@@ -338,7 +336,7 @@ class SimpleUNet_superres(nn.Module):
         except:
             upsampled_lr_img = F.interpolate(lr_img.to('cpu'), scale_factor=magnification_factor, mode='bicubic').to(self.device)
 
-        upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img) ############# TO CHECK
+        upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img)
         
         # SUM THE UP SAMPLED LR IMAGE WITH THE INPUT IMAGE
         

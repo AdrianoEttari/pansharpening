@@ -68,7 +68,7 @@ class get_data_superres(Dataset):
 class data_organizer():
     '''
     This class allows to organize the data in a folder into train, val and test folders.
-    Moreover, it is tailored for the super resolution problem.
+    ATTENTION: it is tailored for the super resolution problem.
     '''
     def __init__(self, main_folder):
         self.main_folder = main_folder
