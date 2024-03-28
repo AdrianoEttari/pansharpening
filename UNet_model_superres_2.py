@@ -70,20 +70,18 @@ class AttentionBlock(nn.Module):
         self.w_g = nn.Sequential(
             nn.Conv2d(f_g, f_int, kernel_size=1, stride=1, padding=0, bias=True).to(device),
             # nn.BatchNorm2d(f_int).to(device)
-        ) # Computes a 1x1 convolution of the 'g' input to reduce its channel dimension to f_int and applies batch normalization.
+        ) # Computes a 1x1 convolution of the 'g' input to reduce its channel dimension to f_int.
         
         self.w_x = nn.Sequential(
             nn.Conv2d(f_x, f_int, kernel_size=2, stride=2, padding=0, bias=True).to(device),
             # nn.BatchNorm2d(f_int).to(device)
-        ) # Computes a 1x1 convolution of the 'x' input to reduce its channel dimension to f_int and applies batch normalization.
-
-        # self.conv_upsample_g = nn.ConvTranspose2d(in_channels=f_int, out_channels=f_int, kernel_size=3, stride=None, padding=1)
+        ) # Computes a 1x1 convolution of the 'x' input to reduce its channel dimension to f_int.
 
         self.psi = nn.Sequential(
             nn.Conv2d(f_int, 1, kernel_size=1, stride=1, padding=0, bias=True).to(device),
             # nn.BatchNorm2d(1).to(device),
             nn.Sigmoid()
-        ) # Computes a 1x1 convolution of the element-wise sum of the processed 'g' and 'x' inputs, followed by batch normalization and a sigmoid activation.
+        ) # Computes a 1x1 convolution of the element-wise sum of the processed 'g' and 'x' inputs, followed by a sigmoid activation.
         
         self.relu = nn.ReLU(inplace=False)
 
@@ -97,8 +95,8 @@ class AttentionBlock(nn.Module):
         Forward pass for the AttentionBlock.
 
         Args:
-            g (torch.Tensor): The 'g' input (image on the up path).
             x (torch.Tensor): The 'x' input (residual image).
+            g (torch.Tensor): The 'g' input (image on the up path).
 
         Returns:
             torch.Tensor: The output of the attention mechanism applied to the input data.
@@ -113,6 +111,10 @@ class AttentionBlock(nn.Module):
         return result
     
 class ConvBlock(nn.Module):
+    '''
+    This class defines a convolutional block that is used in the downsampling and bottleneck of the UNet. It doesn not contain the layer for the actual downsampling (i.e. a convolution with stride 2
+    that is applied immediately after this layer).
+    '''
     def __init__(self, in_ch, out_ch, time_emb_dim, device):
         super().__init__()
         self.time_mlp =  self._make_te(time_emb_dim, out_ch, device=device)
@@ -163,6 +165,9 @@ class ConvBlock(nn.Module):
         return output
 
 class UpConvBlock(nn.Module):
+    '''
+    This class performs a convolution and a transposed convolution on the input data that increase the spatial dimensions of the data by a factor of 2.
+    '''
     def __init__(self, in_ch, out_ch, time_emb_dim, device):
         super().__init__()
         self.time_mlp =  nn.Linear(time_emb_dim, out_ch, device=device)
@@ -205,6 +210,9 @@ class ResidualBlock(nn.Module):
         return out
 
 class RRDB(nn.Module):
+    '''
+    This class is used in order to encode the low-resolution image. It is composed of a series of residual blocks.
+    '''
     def __init__(self, in_channels, out_channels, num_blocks=3):
         super(RRDB, self).__init__()
         self.blocks = nn.Sequential(
@@ -219,6 +227,10 @@ class RRDB(nn.Module):
         return out
     
 class gating_signal(nn.Module):
+    '''
+    This class is used to generate a gating signal that is used in the attention mechanism. It just applies a 1x1 convolution followed by a batch normalization and a ReLU activation that 
+    moves the depth dimension of the input tensor from in_dim to out_dim.
+    '''
     def __init__(self, in_dim, out_dim, device):
         super(gating_signal, self).__init__()
         self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding='same', device=device)
@@ -229,7 +241,6 @@ class gating_signal(nn.Module):
         x = self.conv(x)
         x = self.batch_norm(x)
         return self.relu(x)
-
 
 class Attention_UNet_superres(nn.Module):
     def __init__(self, image_channels=3, out_dim=3, device='cuda'):
