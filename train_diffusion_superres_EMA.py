@@ -14,8 +14,9 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
 import copy
 
-from UNet_model_superres import SimpleUNet_superres, EMA
-# from UNet_model_superres_concat import SimpleUNet_superres, EMA
+# from UNet_model_superres import SimpleUNet_superres, EMA
+from UNet_model_superres_2 import Attention_UNet_superres, EMA
+
 import torch
 import torch.nn as nn
 import torchvision.models as models
@@ -532,7 +533,7 @@ def launch(args):
     # The width is needed to establish the kernel size in the layers of the model
     width = train_dataset[0][1].shape[1]
 
-    model = SimpleUNet_superres(width, input_channels, output_channels, device).to(device)
+    model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
     print("Num params: ", sum(p.numel() for p in model.parameters()))
 
     snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
