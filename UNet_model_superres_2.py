@@ -235,75 +235,59 @@ class Attention_UNet_superres(nn.Module):
     def __init__(self, image_channels=3, out_dim=3, device='cuda'):
         super().__init__()
         self.image_channels = image_channels
-        self.down_channels = (16,32,64,128,256) # Note that there are 3 downsampling layers and 3 upsampling layers.
-        # To understand why len(self.down_channels)=4, you have to imagine that the first layer 
-        # has a Conv2D(16,32), the second layer has a Conv2D(32,64) and the third layer has a Conv2D(64,128).
+        self.down_channels = (16,32,64,128,256) # Note that there are 4 downsampling layers and 4 upsampling layers.
+        # To understand why len(self.down_channels)=5, you have to imagine that the first layer 
+        # has a Conv2D(16,32), the second layer has a Conv2D(32,64) and the third layer has a Conv2D(64,128)...
         self.up_channels = (256,128,64,32,16)
         self.out_dim = out_dim 
         self.time_emb_dim = 100 # Refers to the number of dimensions or features used to represent time.
         self.device = device
         # It's important to note that the dimensionality of time embeddings should be chosen carefully,
         # considering the trade-off between model complexity and the amount of available data.
-        
+
         # INITIAL PROJECTION
         self.conv0 = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1) # SINCE THERE IS PADDING 1 AND STRIDE 1,  THE OUTPUT IS THE SAME SIZE OF THE INPUT
 
+        # LR ENCODER
         self.LR_encoder = RRDB(in_channels=image_channels, out_channels=image_channels, num_blocks=3)
 
+        # UPSAMPLE LR IMAGE
         self.conv_upsampled_lr_img = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1)
-
+        
         # DOWNSAMPLE
-        self.conv_block1 = ConvBlock(in_ch=self.down_channels[0], out_ch=self.down_channels[1], time_emb_dim=self.time_emb_dim, device=self.device)
-        self.down1 = nn.Conv2d(self.down_channels[1], self.down_channels[1], kernel_size=3, stride=2, padding=1, bias=True, device=device)
-
-        self.conv_block2 = ConvBlock(in_ch=self.down_channels[1], out_ch=self.down_channels[2], time_emb_dim=self.time_emb_dim, device=self.device)
-        self.down2 = nn.Conv2d(self.down_channels[2], self.down_channels[2], kernel_size=3, stride=2, padding=1, bias=True, device=device)
-
-        self.conv_block3 = ConvBlock(in_ch=self.down_channels[2], out_ch=self.down_channels[3], time_emb_dim=self.time_emb_dim, device=self.device)
-        self.down3 = nn.Conv2d(self.down_channels[3], self.down_channels[3], kernel_size=3, stride=2, padding=1, bias=True, device=device)
+        self.conv_blocks = nn.ModuleList([
+            ConvBlock(in_ch=self.down_channels[i],
+                      out_ch=self.down_channels[i+1],
+                      time_emb_dim=self.time_emb_dim,
+                      device=self.device) \
+            for i in range(len(self.down_channels)-2)])
+        
+        self.downs = nn.ModuleList([
+            nn.Conv2d(self.down_channels[i+1], self.down_channels[i+1], kernel_size=3, stride=2, padding=1, bias=True, device=device)\
+        for i in range(len(self.down_channels)-2)])
 
         # BOTTLENECK
-        self.conv_block4 = ConvBlock(in_ch=self.down_channels[3], out_ch=self.down_channels[4], time_emb_dim=self.time_emb_dim, device=self.device)
+        self.bottle_neck = ConvBlock(in_ch=self.down_channels[-2],
+                                        out_ch=self.down_channels[-1],
+                                        time_emb_dim=self.time_emb_dim,
+                                        device=self.device)
         
         # UPSAMPLE
-        self.gating_signal_1 = gating_signal(self.up_channels[0], self.up_channels[1], self.device)
-        self.attention_block_1 = AttentionBlock(self.up_channels[1], self.up_channels[1], self.up_channels[1], self.device)
-        self.up1 = UpConvBlock(in_ch=self.up_channels[0], out_ch=self.up_channels[0], time_emb_dim=self.time_emb_dim, device=self.device)
-        self.up_conv1 = nn.Conv2d(int(self.up_channels[0]*3/2), self.up_channels[1], kernel_size=3, stride=1, padding=1, bias=True, device=device)
-
-        self.gating_signal_2 = gating_signal(self.up_channels[1], self.up_channels[2], self.device)
-        self.attention_block_2 = AttentionBlock(self.up_channels[2], self.up_channels[2], self.up_channels[2], self.device)
-        self.up2 = UpConvBlock(in_ch=self.up_channels[1], out_ch=self.up_channels[1], time_emb_dim=self.time_emb_dim, device=self.device)
-        self.up_conv2 = nn.Conv2d(int(self.up_channels[1]*3/2), self.up_channels[2], kernel_size=3, stride=1, padding=1, bias=True, device=device)
-
-        self.gating_signal_3 = gating_signal(self.up_channels[2], self.up_channels[3], self.device)
-        self.attention_block_3 = AttentionBlock(self.up_channels[3], self.up_channels[3], self.up_channels[1], self.device)
-        self.up3 = UpConvBlock(in_ch=self.up_channels[2], out_ch=self.up_channels[2], time_emb_dim=self.time_emb_dim, device=self.device)
-        self.up_conv3 = nn.Conv2d(int(self.up_channels[2]*3/2), self.up_channels[3], kernel_size=3, stride=1, padding=1, bias=True, device=device)
+        self.gating_signals = nn.ModuleList([
+            gating_signal(self.up_channels[i], self.up_channels[i+1], self.device) \
+            for i in range(len(self.up_channels)-2)])
         
-        # # DOWNSAMPLE
-        # self.downs = nn.ModuleList([
-        #     ConvBlock(in_ch=self.down_channels[i],
-        #               out_ch=self.down_channels[i+1],
-        #               time_emb_dim=self.time_emb_dim,
-        #               device=self.device) \
-        #     for i in range(len(self.down_channels)-1)])
+        self.attention_blocks = nn.ModuleList([
+            AttentionBlock(self.up_channels[i+1], self.up_channels[i+1], self.up_channels[i+1], self.device) \
+            for i in range(len(self.up_channels)-2)])
         
-        # self.downs = nn.ModuleList([
-        #     nn.Conv2d(self.down_channels[i+1], self.down_channels[i+1],
-        #                             kernel_size=3, stride=2,
-        #                             padding=1, bias=True,
-        #                             device=device) \
-        #     for i in range(len(self.down_channels)-2)])
+        self.ups = nn.ModuleList([
+            UpConvBlock(in_ch=self.up_channels[i], out_ch=self.up_channels[i], time_emb_dim=self.time_emb_dim, device=self.device) \
+            for i in range(len(self.up_channels)-2)])
         
-        # # UPSAMPLE
-        # self.ups = nn.ModuleList([
-        #     UpConvBlock(in_ch=self.up_channels[i],
-        #                 out_ch=self.up_channels[i+1],
-        #                 time_emb_dim=self.time_emb_dim,
-        #                 device=self.device,
-        #                 kernel_size_up=self.kernel_size_up_list[i]) \
-        #     for i in range(len(self.up_channels)-1)])
+        self.up_convs = nn.ModuleList([
+            nn.Conv2d(int(self.up_channels[i]*3/2), self.up_channels[i+1], kernel_size=3, stride=1, padding=1, bias=True).to(self.device) \
+            for i in range(len(self.up_channels)-2)])
 
         # OUTPUT
         self.output = nn.Conv2d(self.up_channels[-2], self.out_dim, 1)
@@ -340,55 +324,28 @@ class Attention_UNet_superres(nn.Module):
         x = x + upsampled_lr_img
         x_skip = x.clone()
 
-        # UNET (DOWNSAMPLE)
-        x1 = self.conv_block1(x, t, x_skip)
-        x1_down = self.down1(x1)
-
-        x2 = self.conv_block2(x1_down, t, None)
-        x2_down = self.down2(x2)
-
-        x3 = self.conv_block3(x2_down, t, None)
-        x3_down = self.down3(x3)
+        # UNET (DOWNSAMPLE)        
+        residual_inputs = []
+        for i, (conv_block, down) in enumerate(zip(self.conv_blocks, self.downs)):
+            if i == 0:
+                x = conv_block(x, t, x_skip)
+            else:
+                x = conv_block(x, t, None)
+            residual_inputs.append(x)
+            x = down(x)
         
         # UNET (BOTTLENECK)
-        x4 = self.conv_block4(x3_down, t, None)
+        x = self.bottle_neck(x, t, None)
 
         # UNET (UPSAMPLE)
-        gating_signal_1 = self.gating_signal_1(x4)
-        attention_block_1 = self.attention_block_1(x3, gating_signal_1)
-        up1 = self.up1(x4, t)
-        up1 = torch.cat([up1, attention_block_1], dim=1)
-        up_conv1 = self.up_conv1(up1)
+        for i, (gating_signal, attention_block, up, up_conv) in enumerate(zip(self.gating_signals,self.attention_blocks,self.ups, self.up_convs)):
+            gating = gating_signal(x)
+            attention = attention_block(residual_inputs[-(i+1)], gating)
+            x = up(x, t)
+            x = torch.cat([x, attention], dim=1)
+            x = up_conv(x)
 
-        gating_signal_2 = self.gating_signal_2(up_conv1)
-        attention_block_2 = self.attention_block_2(x2, gating_signal_2)
-        up2 = self.up2(up_conv1, t)
-        up2 = torch.cat([up2, attention_block_2], dim=1)
-        up_conv2 = self.up_conv2(up2)
-
-        gating_signal_3 = self.gating_signal_3(up_conv2)
-        attention_block_3 = self.attention_block_3(x1, gating_signal_3)
-        up3 = self.up3(up_conv2, t)
-        up3 = torch.cat([up3, attention_block_3], dim=1)
-        up_conv3 = self.up_conv3(up3)
-
-        
-        # UNet
-        # residual_inputs = []
-        # for i, down in enumerate(self.downs):
-        #     # Downsample
-        #     if i == 0:
-        #         x = down(x, t, x_skip)
-        #         residual_inputs.append(x)
-        #     else:
-        #         x = down(x, t, None)
-        #         residual_inputs.append(x)
-        # for up in self.ups:
-        #     # I need to start from the last one and moving to the first one; that's why we use .pop()
-        #     residual_x = residual_inputs.pop() 
-        #     x = up(x, residual_x, t)
-
-        return self.output(up_conv3)
+        return self.output(x)
 
 
 
