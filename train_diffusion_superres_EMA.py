@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
 import copy
 
-from UNet_model_superres_new import Attention_UNet_superres, EMA
+from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres, EMA
 
 import torch
 import torch.nn as nn
@@ -485,6 +485,7 @@ def launch(args):
         plot_gif_bool: if True, the function will plot a gif with the generated images for each class
         magnification_factor: the magnification factor (i.e. the factor by which the image is magnified in the super-resolution task)
         loss: the loss function to use
+        UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
 
     Output:
         None
@@ -506,7 +507,8 @@ def launch(args):
     plot_gif_bool = args.plot_gif_bool
     magnification_factor = args.magnification_factor
     loss = args.loss
-    
+    UNet_type = args.UNet_type
+
     if image_size % magnification_factor != 0:
         raise ValueError('The image size must be a multiple of the magnification factor')
     
@@ -530,7 +532,12 @@ def launch(args):
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
 
 
-    model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    if UNet_type.lower() == 'attention unet':
+        model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    elif UNet_type.lower() == 'residual attention unet':
+        model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    else:
+        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet')
     print("Num params: ", sum(p.numel() for p in model.parameters()))
 
     snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
@@ -585,6 +592,7 @@ if __name__ == '__main__':
     parser.add_argument('--plot_gif_bool', type=bool, default=False)
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int, default=4)
+    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet'
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
     launch(args)
