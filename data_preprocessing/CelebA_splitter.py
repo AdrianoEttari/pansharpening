@@ -5,23 +5,23 @@ from tqdm import tqdm
 
 celebA_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_aligned'
 celbA_images = os.listdir(celebA_path)
-train_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_25k/train_original'
+train_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_100k/train_original'
 os.makedirs(train_folder_path, exist_ok=True)
-for i in tqdm(range(25000)):
+for i in tqdm(range(100000)):
     file_name=celbA_images[i]
     source_path = os.path.join(celebA_path,file_name)
     shutil.move(source_path, train_folder_path)
 
-val_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_25k/val_original'
+val_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_100k/val_original'
 os.makedirs(val_folder_path, exist_ok=True)
-for i in tqdm(range(25000, 30000)):
+for i in tqdm(range(100000, 120000)):
     file_name=celbA_images[i]
     source_path = os.path.join(celebA_path,file_name)
     shutil.move(source_path, val_folder_path)
 
-test_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_25k/test_original'
+test_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_100k/test_original'
 os.makedirs(test_folder_path, exist_ok=True)
-for i in tqdm(range(30000, 31000)):
+for i in tqdm(range(120000, 121000)):
     file_name=celbA_images[i]
     source_path = os.path.join(celebA_path,file_name)
     shutil.move(source_path, test_folder_path)
