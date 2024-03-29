@@ -30,6 +30,9 @@ for i in tqdm(range(120000, 121000)):
 from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+
+train_folder_path = os.path.join('..','celebA_100k','train_original')
 
 width = []
 height = []
