@@ -30,7 +30,7 @@ test_dataset = get_data_superres(test_path, magnification_factor, 'PIL', transfo
 #%%
 width = train_dataset[0][1].shape[1]
 
-from UNet_model_superres import SimpleUNet_superres
+from old_staff.UNet_model_superres import SimpleUNet_superres
 
 model = SimpleUNet_superres(width, input_channels, output_channels, device).to(device)
 model_name_1 = 'UNet_Faces_superres_EMA_PercLoss3-7'

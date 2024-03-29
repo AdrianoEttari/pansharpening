@@ -14,8 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
 import copy
 
-# from UNet_model_superres import SimpleUNet_superres, EMA
-from UNet_model_superres_2 import Attention_UNet_superres, EMA
+from UNet_model_superres_new import Attention_UNet_superres, EMA
 
 import torch
 import torch.nn as nn
@@ -530,8 +529,6 @@ def launch(args):
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
 
-    # The width is needed to establish the kernel size in the layers of the model
-    width = train_dataset[0][1].shape[1]
 
     model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
     print("Num params: ", sum(p.numel() for p in model.parameters()))
