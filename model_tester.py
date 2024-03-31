@@ -34,7 +34,7 @@ test_dataset = get_data_superres(test_path, magnification_factor, 'PIL', transfo
 # test_img_lr = test_dataset[70][0]
 # test_img_hr = test_dataset[70][1]
 
-test_img_path = 'anime_test.png'
+test_img_path = 'anime_test.jpg'
 test_img_hr = Image.open(test_img_path)
 test_img_hr = transform(test_img_hr)
 downsample = transforms.Resize((test_img_hr.size[0] // magnification_factor, test_img_hr.size[1] // magnification_factor),
@@ -82,7 +82,7 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, test_img_hr, 
 
 # model_tester(['Attention_UNet_superres_magnification4_celeb100k'], ['snapshot_NOT_END.pt'], test_img_lr, test_img_hr, device)
 model_tester(['Attention_UNet_superres_magnification2_ANIME50k', 'Residual_Attention_UNet_superres_magnification2_ANIME50k'],
-             ['snapshot_NOT_END.pt', 'snapshot_NOT_END.pt'], test_img_lr, test_img_hr, device)
+             ['snapshot.pt', 'snapshot.pt'], test_img_lr, test_img_hr, device)
 
 
 # %% GAUSSIAN BLUR, BICUBIC DOWNSAMPLIONG
