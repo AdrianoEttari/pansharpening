@@ -139,6 +139,18 @@ class data_organizer():
             destination_path = os.path.join(destination_folder, os.path.basename(file_full_path))
             shutil.move(file_full_path, destination_path)
 
+def convert_png_to_jpg(png_file, jpg_file):
+    try:
+        # Open the PNG image
+        with Image.open(png_file) as img:
+            # Convert RGBA images to RGB
+            if img.mode == 'RGBA':
+                img = img.convert('RGB')
+            # Save as JPG
+            img.save(jpg_file, 'JPEG')
+        print("Conversion successful!")
+    except Exception as e:
+        print("Conversion failed:", e)
 
 if __name__=="__main__":
     main_folder = 'anime_data'
