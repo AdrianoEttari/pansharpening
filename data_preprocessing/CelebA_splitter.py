@@ -3,25 +3,25 @@ import os
 import shutil
 from tqdm import tqdm
 
-celebA_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_aligned'
+celebA_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_100k/train_original'
 celbA_images = os.listdir(celebA_path)
-train_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_100k/train_original'
+train_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_50k/train_original'
 os.makedirs(train_folder_path, exist_ok=True)
-for i in tqdm(range(100000)):
+for i in tqdm(range(50000)):
     file_name=celbA_images[i]
     source_path = os.path.join(celebA_path,file_name)
     shutil.move(source_path, train_folder_path)
 
-val_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_100k/val_original'
+val_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_50k/val_original'
 os.makedirs(val_folder_path, exist_ok=True)
-for i in tqdm(range(100000, 120000)):
+for i in tqdm(range(50000, 55000)):
     file_name=celbA_images[i]
     source_path = os.path.join(celebA_path,file_name)
     shutil.move(source_path, val_folder_path)
 
-test_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_100k/test_original'
+test_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_50k/test_original'
 os.makedirs(test_folder_path, exist_ok=True)
-for i in tqdm(range(120000, 121000)):
+for i in tqdm(range(55000, 56000)):
     file_name=celbA_images[i]
     source_path = os.path.join(celebA_path,file_name)
     shutil.move(source_path, test_folder_path)
