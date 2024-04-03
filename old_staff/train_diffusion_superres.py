@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
 
 
-from UNet_model_superres import SimpleUNet_superres
+from old_staff.UNet_model_superres import SimpleUNet_superres
 
 class Diffusion:
     def __init__(

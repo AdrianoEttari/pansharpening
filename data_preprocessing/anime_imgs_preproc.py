@@ -1,38 +1,36 @@
 #%%
+#%%
 import os
 import shutil
 from tqdm import tqdm
 
-celebA_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_100k/train_original'
-celbA_images = os.listdir(celebA_path)
-train_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_50k/train_original'
+anime_data_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/anime_data'
+anime_imgs = os.listdir(anime_data_path)
+train_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/anime_data_50k/train_original'
 os.makedirs(train_folder_path, exist_ok=True)
 for i in tqdm(range(50000)):
-    file_name=celbA_images[i]
-    source_path = os.path.join(celebA_path,file_name)
+    file_name=anime_imgs[i]
+    source_path = os.path.join(anime_data_path,file_name)
     shutil.move(source_path, train_folder_path)
 
-val_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_50k/val_original'
+val_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/anime_data_50k/val_original'
 os.makedirs(val_folder_path, exist_ok=True)
 for i in tqdm(range(50000, 55000)):
-    file_name=celbA_images[i]
-    source_path = os.path.join(celebA_path,file_name)
+    file_name=anime_imgs[i]
+    source_path = os.path.join(anime_data_path,file_name)
     shutil.move(source_path, val_folder_path)
 
-test_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/celebA_50k/test_original'
+test_folder_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/anime_data_50k/test_original'
 os.makedirs(test_folder_path, exist_ok=True)
 for i in tqdm(range(55000, 56000)):
-    file_name=celbA_images[i]
-    source_path = os.path.join(celebA_path,file_name)
+    file_name=anime_imgs[i]
+    source_path = os.path.join(anime_data_path,file_name)
     shutil.move(source_path, test_folder_path)
 
 #%%
 from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-
-train_folder_path = os.path.join('..','celebA_100k','train_original')
 
 width = []
 height = []
@@ -74,3 +72,28 @@ plt.show()
 #         counter+=1
 # print(counter)  
 # %%
+
+# %%
+from PIL import Image
+import numpy as np
+from tqdm import tqdm
+import os
+
+root = os.path.join('..', 'anime_data')
+sets = ['train_original', 'val_original', 'test_original']
+
+for set in sets:
+    set_path = os.path.join(root, set)
+    for file in tqdm(os.listdir(set_path)):
+        file_path = os.path.join(set_path, file)
+        img = Image.open(file_path)
+        img = np.array(img)
+        if len(img.shape) != 3:
+            os.remove(file_path)
+        elif img.shape[2] == 4:
+            os.remove(file_path)
+            img = img[:,:,:3]
+            img = Image.fromarray(img)
+            img.save(file_path)
+        elif img.shape[2] != 3:
+            os.remove(file_path)

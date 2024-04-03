@@ -67,8 +67,10 @@ class get_data_superres(Dataset):
     
 class data_organizer():
     '''
-    This class allows to organize the data in a folder into train, val and test folders.
-    Moreover, it is tailored for the super resolution problem.
+    This class allows to organize the data inside main_folder (provided in the __init__) 
+    into train_original, val_original and test_original folders that will be created inside
+    main_folder.
+    ATTENTION: it is tailored for the super resolution problem.
     '''
     def __init__(self, main_folder):
         self.main_folder = main_folder
@@ -137,8 +139,24 @@ class data_organizer():
             destination_path = os.path.join(destination_folder, os.path.basename(file_full_path))
             shutil.move(file_full_path, destination_path)
 
+def convert_png_to_jpg(png_file, jpg_file):
+    try:
+        # Open the PNG image
+        with Image.open(png_file) as img:
+            # Convert RGBA images to RGB
+            if img.mode == 'RGBA':
+                img = img.convert('RGB')
+            # Save as JPG
+            img.save(jpg_file, 'JPEG')
+        print("Conversion successful!")
+    except Exception as e:
+        print("Conversion failed:", e)
 
 if __name__=="__main__":
-    main_folder = 'Humans_test'
+    main_folder = 'anime_data'
     data_organizer = data_organizer(main_folder)
     data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
+    for root, dirs, files in os.walk(main_folder):
+        for file in files:
+            if file == '.DS_Store':
+                os.remove(os.path.join(root, file))
