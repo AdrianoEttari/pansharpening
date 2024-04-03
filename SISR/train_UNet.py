@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
 import copy
 
-from UNet_model_SISR import Residual_Attention_UNet_superres, Attention_UNet_superres, EMA
+from SISR.UNet_model_SISR import Residual_Attention_UNet_superres, Attention_UNet_superres, EMA
 
 import torch
 import torch.nn as nn
@@ -270,7 +270,7 @@ class SISR_UNet():
                     
                     for (lr_img,hr_img) in pbar_val:
                         lr_img = lr_img.to(self.device)
-
+                        hr_img = hr_img.to(self.device)
                         
                         sr_img = model(lr_img, self.magnification_factor).to(self.device)
 
