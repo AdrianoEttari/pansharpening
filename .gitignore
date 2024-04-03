@@ -166,7 +166,6 @@ Humans_test/
 CelebA/
 animal_imgs/
 other/
-SISR/
 
 # Files
 *.jpg
