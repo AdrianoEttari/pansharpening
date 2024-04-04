@@ -91,13 +91,15 @@ from PIL import Image, ImageFilter
 import numpy as np
 
 
-img_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/Humans_test/train_original/1 (1).jpeg'
+img_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/anime_data_50k/test_original/81-7qew7l1.jpg'
 
 original_img = Image.open(img_path)
-original_img = original_img.resize((224, 224), Image.BICUBIC)
+# original_img = original_img.resize((512, 512), Image.BICUBIC)
 
-radius = 2
+radius = 3
 blurred_image = original_img.filter(ImageFilter.GaussianBlur(radius))
 
-downsampled_img = original_img.resize((224//4, 224//4), Image.BICUBIC).resize((224, 224), Image.BICUBIC)
-downsampled_blurred_img = blurred_image.resize((224//4, 224//4), Image.BICUBIC).resize((224, 224), Image.BICUBIC)
+downsampled_img = original_img.resize((512//8, 512//8), Image.BICUBIC).resize((512, 512), Image.BICUBIC)
+downsampled_blurred_img = blurred_image.resize((512//8, 512//8), Image.BICUBIC).resize((512, 512), Image.BICUBIC)
+
+# %%
