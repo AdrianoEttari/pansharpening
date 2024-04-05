@@ -1,18 +1,18 @@
 import os
-import logging
+# import logging
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
-from torchvision import datasets
+# from torchvision import datasets
 import imageio
-import numpy as np
+# import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
-import copy
+# import copy
 
 from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres
 
@@ -21,6 +21,11 @@ import torch.nn as nn
 import torchvision.models as models
 import torchvision.transforms as transforms
 import torch.nn.functional as F
+
+# import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
+from torch.utils.data.distributed import DistributedSampler
 
 class VGGPerceptualLoss(nn.Module):
     def __init__(self, device):
@@ -102,8 +107,8 @@ class Diffusion:
             noise_steps=1000,
             beta_start=1e-4,
             beta_end=0.02,
-            magnification_factor=4,
             device='cuda',
+            magnification_factor=4,
             image_size=224,
             model_name='superres'):
     
@@ -115,11 +120,10 @@ class Diffusion:
         self.magnification_factor = magnification_factor
         self.device = device
         self.snapshot_path = snapshot_path
-        self.model = model.to(self.device)
         
+        self.model = model.to(self.device)
         # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch (MAYBE WE CAN REMOVE IT FROM HERE)
         self.epochs_run = 0
-
         # If a snapshot exists, we load it
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
@@ -285,8 +289,10 @@ class Diffusion:
             None
         '''
         snapshot = {
-            "MODEL_STATE": model.state_dict(),
+            "MODEL_STATE": model.module.state_dict(),
             "EPOCHS_RUN": epoch,
+            # "OPTIMIZER":self.optimizer.state_dict(),
+            # "LR_SCHEDULER":self.lr_scheduler.state_dict(),
         }
         torch.save(snapshot, self.snapshot_path)
         print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
@@ -297,7 +303,8 @@ class Diffusion:
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
-        snapshot = torch.load(self.snapshot_path, map_location=self.device)
+        loc = f"cuda: {self.device}"
+        snapshot = torch.load(self.snapshot_path, map_location=loc)
         self.model.load_state_dict(snapshot["MODEL_STATE"])
         self.epochs_run = snapshot["EPOCHS_RUN"]
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
@@ -325,6 +332,7 @@ class Diffusion:
             loss: the loss function to use
             verbose: if True, the function will use the tqdm during the training and the validation
         '''
+
         model = self.model
 
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -352,6 +360,7 @@ class Diffusion:
         best_loss = float('inf')  
 
         for epoch in range(self.epochs_run, epochs):
+            train_loader.sampler.set_epoch(epoch)
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
@@ -364,7 +373,7 @@ class Diffusion:
             running_train_loss = 0.0
             running_val_loss = 0.0
             
-            model.train()   
+            model.train()
             for i,(lr_img,hr_img) in enumerate(pbar_train):
                 
                 lr_img = lr_img.to(self.device)
@@ -396,7 +405,7 @@ class Diffusion:
             running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
-            if epoch % check_preds_epoch == 0:
+            if self.device==0 and epoch % check_preds_epoch == 0:
                 if val_loader is None:
                     self._save_snapshot(epoch, model)
 
@@ -450,7 +459,8 @@ class Diffusion:
                 if running_val_loss < best_loss - 0:
                     best_loss = running_val_loss
                     epochs_without_improving = 0
-                    self._save_snapshot(self, epoch, model)
+                    if self.device==0:
+                        self._save_snapshot(self, epoch, model)
                 else:
                     epochs_without_improving += 1
 
@@ -498,13 +508,15 @@ def launch(args):
     snapshot_folder_path = args.snapshot_folder_path
     model_name = args.model_name
     noise_steps = args.noise_steps
-    device = args.device
+    # device = args.device
     patience = args.patience
     input_channels, output_channels = args.inp_out_channels, args.inp_out_channels
     plot_gif_bool = args.plot_gif_bool
     magnification_factor = args.magnification_factor
     loss = args.loss
     UNet_type = args.UNet_type
+
+    init_process_group(backend="nccl") # nccl stands for NVIDIA Collective Communication Library. It is used for distributed comunications across multiple GPUs.
 
     if image_size % magnification_factor != 0:
         raise ValueError('The image size must be a multiple of the magnification factor')
@@ -525,9 +537,12 @@ def launch(args):
     train_dataset = get_data_superres(train_path, magnification_factor, 'PIL', transform)
     val_dataset = get_data_superres(valid_path, magnification_factor, 'PIL', transform)
 
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, sampler=DistributedSampler(val_dataset))
 
+    gpu_id = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(int(gpu_id))
+    device = gpu_id
 
     if UNet_type.lower() == 'attention unet':
         model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
@@ -536,6 +551,8 @@ def launch(args):
     else:
         raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet')
     print("Num params: ", sum(p.numel() for p in model.parameters()))
+
+    model = DDP(model, device_ids=[device], find_unused_parameters=True)
 
     snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
 
@@ -551,6 +568,8 @@ def launch(args):
         lr=lr, epochs=epochs, check_preds_epoch=check_preds_epoch,
         train_loader=train_loader, val_loader=val_loader, patience=patience, loss=loss, verbose=True)
     
+    destroy_process_group()
+
     # Sampling
     fig, axs = plt.subplots(5,3, figsize=(15,15))
     for i in range(5):
@@ -581,7 +600,7 @@ if __name__ == '__main__':
     parser.add_argument('--snapshot_name', type=str, default='snapshot.pt')
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--noise_steps', type=int, default=200)
-    parser.add_argument('--device', type=str, default='cuda')
+    # parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--dataset_path', type=str, default=None)
     parser.add_argument('--inp_out_channels', type=int, default=3) # input channels must be the same of the output channels

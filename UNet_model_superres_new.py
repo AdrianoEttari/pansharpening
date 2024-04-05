@@ -541,18 +541,26 @@ class Residual_Attention_UNet_superres(nn.Module):
         return self.output(x)
 
 if __name__=="__main__":
-    model = Attention_UNet_superres(224, device='cpu')
-    # print(f'This model has {sum(p.numel() for p in model.parameters())} parameters')
+    model = Residual_Attention_UNet_superres(device='cpu')
 
     def print_parameter_count(model):
         total_params = 0
+        trainable_params = 0  # Count only trainable parameters
+
+        i = 0
         for name, param in model.named_parameters():
+            
             num_params = param.numel()
             total_params += num_params
-            print(f"Layer: {name}, Parameters: {num_params}")
+            if param.requires_grad:
+                trainable_params += num_params
+            
+            print(f" Idx: {i}, Layer: {name}, Parameters: {num_params}, Requires Grad: {param.requires_grad}")
+            i+=1
         print("=" * 50)
-        print(f"Total Parameters: {total_params}")
+        print(f"Total Parameters: {total_params}, Trainable Parameters: {trainable_params}")
 
     print_parameter_count(model)
+
 
 

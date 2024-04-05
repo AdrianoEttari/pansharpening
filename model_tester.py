@@ -1,6 +1,6 @@
 #%% IMPORT DATA
 import torch
-from train_diffusion_superres import Diffusion
+from train_diffusion_superres_DDP import Diffusion
 from torchvision import transforms
 from utils import get_data_superres
 from torch.utils.data import DataLoader
