@@ -22,7 +22,6 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 import torch.nn.functional as F
 
-# import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data.distributed import DistributedSampler
@@ -485,7 +484,6 @@ def launch(args):
         snapshot_folder_path: the folder path where the snapshots will be saved
         model_name: the name of the model
         noise_steps: the number of noise steps
-        device: the device to use (cuda, cpu, mps)
         patience: the number of epochs after which the training will be stopped if the validation loss is increasing
         input_channels: the number of input channels
         output_channels: the number of output channels
@@ -508,7 +506,6 @@ def launch(args):
     snapshot_folder_path = args.snapshot_folder_path
     model_name = args.model_name
     noise_steps = args.noise_steps
-    # device = args.device
     patience = args.patience
     input_channels, output_channels = args.inp_out_channels, args.inp_out_channels
     plot_gif_bool = args.plot_gif_bool
