@@ -463,7 +463,7 @@ class Diffusion:
                 else:
                     epochs_without_improving += 1
 
-                if self.early_stopping(epoch, model, patience, epochs_without_improving):
+                if self.early_stopping(patience, epochs_without_improving):
                     break
             print('Epochs without improving: ', epochs_without_improving)
 
