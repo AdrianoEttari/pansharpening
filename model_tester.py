@@ -1,6 +1,6 @@
 #%% IMPORT DATA
 import torch
-from train_diffusion_superres_DDP import Diffusion
+from train_diffusion_superres import Diffusion
 from torchvision import transforms
 from utils import get_data_superres
 from torch.utils.data import DataLoader
@@ -8,13 +8,13 @@ import os
 from PIL import Image
 import matplotlib.pyplot as plt
 
-image_size = 224
+image_size = 512
 input_channels = output_channels = 3
 device = 'mps'
 noise_schedule='cosine'
 noise_steps = 1500
-dataset_path = os.path.join('celebA_100k')
-magnification_factor = 4
+dataset_path = os.path.join('anime_data_50k')
+magnification_factor = 8
 
 transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
@@ -80,11 +80,13 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, test_img_hr, 
     plt.tight_layout()
     plt.show()
 
-model_tester(['Attention_UNet_superres_magnification4_celeb100k'], ['snapshot_NOT_END.pt'], test_img_lr, test_img_hr, device)
+# model_tester(['Attention_UNet_superres_magnification4_celeb100k'], ['snapshot_NOT_END.pt'], test_img_lr, test_img_hr, device)
 # model_tester(['Attention_UNet_superres_magnification2_ANIME50k', 'Residual_Attention_UNet_superres_magnification2_ANIME50k'],
 #              ['snapshot.pt', 'snapshot.pt'], test_img_lr, test_img_hr, device)
 # model_tester(['Residual_Attention_UNet_superres_magnification4_ANIME50k','Attention_UNet_superres_magnification4_ANIME50k'],
 #               ['snapshot.pt','snapshot.pt'], test_img_lr, test_img_hr, device)
+model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
+              ['snapshot.pt'], test_img_lr, test_img_hr, device)
 
 # %% GAUSSIAN BLUR, BICUBIC DOWNSAMPLIONG
 from PIL import Image, ImageFilter

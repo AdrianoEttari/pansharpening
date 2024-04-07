@@ -450,7 +450,7 @@ class Diffusion:
                 if running_val_loss < best_loss - 0:
                     best_loss = running_val_loss
                     epochs_without_improving = 0
-                    self._save_snapshot(self, epoch, model)
+                    self._save_snapshot(epoch, model)
                 else:
                     epochs_without_improving += 1
 
