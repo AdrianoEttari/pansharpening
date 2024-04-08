@@ -13,7 +13,7 @@ input_channels = output_channels = 3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 noise_schedule='cosine'
 noise_steps = 1500
-dataset_path = os.path.join('DIV2K_split')
+dataset_path = os.path.join('DIV2k_split')
 magnification_factor = 4
 
 transform = transforms.Compose([
@@ -81,16 +81,16 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_
         fig, axs = plt.subplots(num_cells//2,num_cells//2 , figsize=(10 * len(super_lr_imgs), 10))
         axs = axs.ravel()
     
-    
-
     axs[0].imshow(test_img_lr.permute(1,2,0).detach().cpu())
     axs[0].set_title('Low Resolution Image')
-    for i, super_lr_img in enumerate(super_lr_imgs):
-        axs[i+1].imshow(super_lr_img[0].permute(1,2,0).detach().cpu())
-        axs[i+1].set_title(model_name_list[i])
+    counter = 1
+    for super_lr_img in super_lr_imgs:
+        axs[counter].imshow(super_lr_img[0].permute(1,2,0).detach().cpu())
+        axs[counter].set_title(model_name_list[counter-1])
+        counter += 1
     if test_img_hr is not None:
-        axs[i+1].imshow(test_img_hr.permute(1,2,0).detach().cpu())
-        axs[i+1].set_title('High Resolution Image')
+        axs[counter].imshow(test_img_hr.permute(1,2,0).detach().cpu())
+        axs[counter].set_title('High Resolution Image')
     plt.tight_layout()
     if save_path is not None:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
