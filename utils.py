@@ -153,7 +153,7 @@ def convert_png_to_jpg(png_file, jpg_file):
         print("Conversion failed:", e)
 
 if __name__=="__main__":
-    main_folder = 'anime_data'
+    main_folder = 'DIV2k_split'
     data_organizer = data_organizer(main_folder)
     data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
     for root, dirs, files in os.walk(main_folder):
