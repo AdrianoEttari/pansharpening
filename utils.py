@@ -152,11 +152,44 @@ def convert_png_to_jpg(png_file, jpg_file):
     except Exception as e:
         print("Conversion failed:", e)
 
+def img_splitter(source_folder, destination_folder, desired_width, threshold_rate=0.2):
+    os.makedirs(destination_folder, exist_ok=True)
+    for img_relative_path in tqdm(os.listdir(source_folder)):
+        counter = len(os.listdir(destination_folder))
+        img_path = os.path.join(source_folder, img_relative_path)
+        img = Image.open(img_path)
+        img = np.array(img)
+        width = img.shape[1]
+        height = img.shape[0]
+
+        threshold = desired_width * threshold_rate
+
+        if (width < desired_width - threshold) or (height < desired_width - threshold):
+            print(f"Image {img_relative_path} is too small to be split or resized.")
+        elif (width > desired_width) and (width < desired_width + threshold) and (height > desired_width) and (height < desired_width + threshold):
+            # No need to resize, just save
+            save_path = os.path.join(destination_folder, f"cropped_{counter}.png")
+            Image.fromarray(img).save(save_path)
+            counter += 1
+        else:
+            # Perform cropping
+            for i in range(0, width - desired_width, desired_width // 2):  # Overlapping by half width
+                for j in range(0, height - desired_width, desired_width // 2):  # Overlapping by half height
+                    cropped_img = img[j:j + desired_width, i:i + desired_width]
+                    save_path = os.path.join(destination_folder, f"cropped_{counter}.png")
+                    Image.fromarray(cropped_img).save(save_path)
+                    counter += 1
+
 if __name__=="__main__":
-    main_folder = 'DIV2k_split'
-    data_organizer = data_organizer(main_folder)
-    data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
-    for root, dirs, files in os.walk(main_folder):
-        for file in files:
-            if file == '.DS_Store':
-                os.remove(os.path.join(root, file))
+    # main_folder = 'DIV2k_split'
+    # data_organizer = data_organizer(main_folder)
+    # data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
+    # for root, dirs, files in os.walk(main_folder):
+    #     for file in files:
+    #         if file == '.DS_Store':
+    #             os.remove(os.path.join(root, file))
+
+    source_folder = 'satellite_imgs_test'
+    destination_folder = 'satellite_imgs_test_cropped'
+    desired_width = 128
+    img_splitter(source_folder, destination_folder, desired_width)
