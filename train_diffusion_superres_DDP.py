@@ -570,7 +570,7 @@ def launch(args):
     destroy_process_group()
 
     # Sampling
-    fig, axs = plt.subplots(5,3, figsize=(15,15))
+    fig, axs = plt.subplots(5,4, figsize=(15,15))
     for i in range(5):
         lr_img = train_dataset[i][0]
         hr_img = train_dataset[i][1]

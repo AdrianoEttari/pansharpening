@@ -400,7 +400,7 @@ class Diffusion:
                 if val_loader is None:
                     self._save_snapshot(epoch, model)
 
-                fig, axs = plt.subplots(5,3, figsize=(15,15))
+                fig, axs = plt.subplots(5,4, figsize=(15,15))
                 for i in range(5):
                     lr_img = val_loader.dataset[i][0]
                     hr_img = val_loader.dataset[i][1]
@@ -555,7 +555,7 @@ def launch(args):
         train_loader=train_loader, val_loader=val_loader, patience=patience, loss=loss, verbose=True)
     
     # Sampling
-    fig, axs = plt.subplots(5,3, figsize=(15,15))
+    fig, axs = plt.subplots(5,4, figsize=(15,15))
     for i in range(5):
         lr_img = train_dataset[i][0]
         hr_img = train_dataset[i][1]
