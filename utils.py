@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 import torch
-from PIL import Image
+from PIL import Image, ImageFilter
 import numpy as np
 import os
 from torchvision import transforms
@@ -23,11 +23,12 @@ class get_data_superres(Dataset):
 
     __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
     '''
-    def __init__(self, root_dir, magnification_factor, data_format='PIL', transform=None):
+    def __init__(self, root_dir, magnification_factor, blur_radius=0.5, data_format='PIL', transform=None):
         self.root_dir = root_dir
         self.transform = transform
         self.magnification_factor = magnification_factor    
         self.original_imgs_dir = os.path.join(self.root_dir)
+        self.blur_radius = blur_radius
         self.data_format = data_format
         self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
 
@@ -59,6 +60,9 @@ class get_data_superres(Dataset):
         except:
             x = downsample(y.to('cpu')).to(y.device)
 
+        if self.blur_radius > 0:
+            x = x.filter(ImageFilter.GaussianBlur(self.blur_radius))
+    
         to_tensor = transforms.ToTensor()
         x = to_tensor(x)
         y = to_tensor(y)
@@ -153,6 +157,13 @@ def convert_png_to_jpg(png_file, jpg_file):
         print("Conversion failed:", e)
 
 def img_splitter(source_folder, destination_folder, desired_width, threshold_rate=0.2):
+    '''
+    This function takes the images into the source_folder and checks if they match the desired_width (=desired_height, considering
+    that the images are square). If they are smaller than the desired_width-threshold, they are not split or resized and
+    we just discard them; by contradiction, if they are larger than the desired_width (desired_height) but smaller than the desired_width+threshold
+    (desired_height+threshold) we just crop them to the desired_width(desired_height); finally, if they are larger than the desired_width+threshold,
+    we split them into overlapping patches of size desired_width x desired_width.
+    '''
     os.makedirs(destination_folder, exist_ok=True)
     for img_relative_path in tqdm(os.listdir(source_folder)):
         counter = len(os.listdir(destination_folder))

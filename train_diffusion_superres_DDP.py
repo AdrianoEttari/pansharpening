@@ -533,8 +533,8 @@ def launch(args):
     train_path = f'{dataset_path}/train_original'
     valid_path = f'{dataset_path}/val_original'
 
-    train_dataset = get_data_superres(train_path, magnification_factor, 'PIL', transform)
-    val_dataset = get_data_superres(valid_path, magnification_factor, 'PIL', transform)
+    train_dataset = get_data_superres(train_path, magnification_factor, 0.5, 'PIL', transform)
+    val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, 'PIL', transform)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, sampler=DistributedSampler(val_dataset))
