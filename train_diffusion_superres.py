@@ -406,6 +406,7 @@ class Diffusion:
                     hr_img = val_loader.dataset[i][1]
 
                     superres_img = self.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
+                    residual_img = hr_img.to(self.device) - superres_img[0].to(self.device)
 
                     axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
                     axs[i,0].set_title('Low resolution image')
@@ -413,6 +414,8 @@ class Diffusion:
                     axs[i,1].set_title('High resolution image')
                     axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
                     axs[i,2].set_title('Super resolution image')
+                    axs[i,3].hist(residual_img.permute(1,2,0).cpu().numpy().ravel())
+                    axs[i,3].set_title('Residual image')
 
 
                 plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
@@ -558,6 +561,7 @@ def launch(args):
         hr_img = train_dataset[i][1]
 
         superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=plot_gif_bool)
+        residual_img = hr_img.to(device) - superres_img[0].to(device)
 
         axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
         axs[i,0].set_title('Low resolution image')
@@ -565,6 +569,8 @@ def launch(args):
         axs[i,1].set_title('High resolution image')
         axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
         axs[i,2].set_title('Super resolution image')
+        axs[i,3].hist(residual_img.permute(1,2,0).cpu().numpy().ravel())
+        axs[i,3].set_title('Residual image')
 
     plt.savefig(os.path.join(os.getcwd(), 'models_run', model_name, 'results', 'superres_results.png'))
 
