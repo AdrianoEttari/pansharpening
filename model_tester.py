@@ -8,13 +8,13 @@ import os
 from PIL import Image
 import matplotlib.pyplot as plt
 
-image_size = 512
+image_size = 224
 input_channels = output_channels = 3
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 device = 'mps'
 noise_schedule='cosine'
 noise_steps = 1500
-dataset_path = os.path.join('anime_data_50k')
+dataset_path = os.path.join('celebA_50k')
 magnification_factor = 4
 
 transform = transforms.Compose([
@@ -28,9 +28,9 @@ train_path = f'{dataset_path}/train_original'
 valid_path = f'{dataset_path}/val_original'
 test_path = f'{dataset_path}/test_original'
 
-train_dataset = get_data_superres(train_path, magnification_factor, 'PIL', transform)
-val_dataset = get_data_superres(valid_path, magnification_factor, 'PIL', transform)
-test_dataset = get_data_superres(test_path, magnification_factor, 'PIL', transform)
+train_dataset = get_data_superres(root_dir=train_path, magnification_factor=magnification_factor,blur_radius=0.5, data_format='PIL', transform=transform)
+val_dataset = get_data_superres(root_dir=valid_path, magnification_factor=magnification_factor,blur_radius=0.5, data_format='PIL', transform=transform)
+test_dataset = get_data_superres(root_dir=test_path, magnification_factor=magnification_factor,blur_radius=0.5, data_format='PIL', transform=transform)
 
 test_img_lr = test_dataset[110][0]
 test_img_hr = test_dataset[110][1]
@@ -74,27 +74,20 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_
         super_lr_img = diffusion.sample(1, model, test_img_lr, input_channels=3, plot_gif_bool=False)
         super_lr_imgs.append(super_lr_img)
 
-    if (test_img_hr is None):
-        fig, axs = plt.subplots(1,len(super_lr_imgs)+1 , figsize=(10 * len(super_lr_imgs), 10))
-        axs = axs.ravel()
-    else:
-        num_cells = len(super_lr_imgs) + 2+1
-        fig, axs = plt.subplots(num_cells//2,num_cells//2 , figsize=(10 * len(super_lr_imgs), 10))
-        axs = axs.ravel()
+
+    fig, axs = plt.subplots(len(super_lr_imgs)+1,2, figsize=(10 * len(super_lr_imgs), 10))
     
-    axs[0].imshow(test_img_lr.permute(1,2,0).detach().cpu())
-    axs[0].set_title('Low Resolution Image')
-    counter = 1
-    for super_lr_img in super_lr_imgs:
-        axs[counter].imshow(super_lr_img[0].permute(1,2,0).detach().cpu())
-        axs[counter].set_title(model_name_list[counter-1])
-        counter += 1
+    axs[0,0].imshow(test_img_lr.permute(1,2,0).detach().cpu())
+    axs[0,0].set_title('Low Resolution Image')
     if test_img_hr is not None:
-        axs[counter].imshow(test_img_hr.permute(1,2,0).detach().cpu())
-        axs[counter].set_title('High Resolution Image')
+        axs[0,1].imshow(test_img_hr.permute(1,2,0).detach().cpu())
+        axs[0,1].set_title('High Resolution Image')
+    for i,super_lr_img in enumerate(super_lr_imgs):
+        axs[i+1,0].imshow(super_lr_img[0].permute(1,2,0).detach().cpu())
+        axs[i+1,0].set_title(model_name_list[i])
         residual_img = test_img_hr.to(device) - super_lr_img[0].to(device)
-        axs[counter+1].hist(residual_img.permute(1,2,0).detach().cpu().ravel())
-        axs[counter+1].set_title('Residual Histogram')
+        axs[i+1,1].hist(residual_img.permute(1,2,0).detach().cpu().ravel())
+        axs[i+1,1].set_title('Residual Histogram')
     plt.tight_layout()
     if save_path is not None:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -105,8 +98,11 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_
 #              ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 # model_tester(['Residual_Attention_UNet_superres_magnification4_ANIME50k','Attention_UNet_superres_magnification4_ANIME50k'],
 #               ['snapshot.pt','snapshot.pt'], test_img_lr, device, test_img_hr)
-model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
-              ['snapshot.pt'], test_img_lr, device, test_img_hr)
+# model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
+#               ['snapshot.pt'], test_img_lr, device, test_img_hr)
+model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_celebA_GaussBlur', 
+              'Residual_Attention_UNet_superres_magnification4_celeb50k'],
+              ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 
 # sr_test_path = 'sr_satellite_imgs_test'
 # for test_img_lr_path in os.listdir(folder_test_img_lr_path):
