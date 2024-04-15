@@ -302,9 +302,12 @@ class Diffusion:
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
+        from collections import OrderedDict
+
         loc = f"cuda: {self.device}"
         snapshot = torch.load(self.snapshot_path, map_location=loc)
-        self.model.module.load_state_dict(snapshot["MODEL_STATE"])
+        model_state = OrderedDict((key.replace('module.', ''), value) for key, value in snapshot['MODEL_STATE'].items())
+        self.model.module.load_state_dict(model_state)
         self.epochs_run = snapshot["EPOCHS_RUN"]
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
