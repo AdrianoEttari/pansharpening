@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import os
 from PIL import Image
 import matplotlib.pyplot as plt
+import numpy as np
 
 image_size = 224
 input_channels = output_channels = 3
@@ -86,8 +87,14 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_
         axs[i+1,0].imshow(super_lr_img[0].permute(1,2,0).detach().cpu())
         axs[i+1,0].set_title(model_name_list[i])
         residual_img = test_img_hr.to(device) - super_lr_img[0].to(device)
-        axs[i+1,1].hist(residual_img.permute(1,2,0).detach().cpu().ravel())
-        axs[i+1,1].set_title('Residual Histogram')
+        non_zero_values = residual_img.permute(1,2,0).detach().cpu().ravel()[residual_img.permute(1,2,0).detach().cpu().ravel() != 0]
+        bins = np.linspace(non_zero_values.min(), non_zero_values.max(), num=50)
+        axs[i+1,1].hist(non_zero_values, bins=bins, alpha=0.7, color='blue', edgecolor='black')
+        axs[i+1,1].set_title('Residual Histogram (Non-Zero Values)')
+        # residual_img = np.abs(residual_img.permute(1,2,0).detach().cpu().numpy())
+        # axs[i+1,1].imshow(residual_img, cmap='hot', interpolation='nearest')
+        # axs[i+1,1].set_title('Residual Image')
+
     plt.tight_layout()
     if save_path is not None:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -120,22 +127,6 @@ model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_celebA_GaussB
 #     test_img_hr = img_path[1]
 #     model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_DIV2k_512'],
 #               ['snapshot.pt'], test_img_lr, device, test_img_hr, save_path=os.path.join(sr_test_path, f'{i}.png'))
-
-# %% GAUSSIAN BLUR, BICUBIC DOWNSAMPLIONG
-# from PIL import Image, ImageFilter
-# import numpy as np
-
-
-# img_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/anime_data_50k/test_original/81-7qew7l1.jpg'
-
-# original_img = Image.open(img_path)
-# # original_img = original_img.resize((512, 512), Image.BICUBIC)
-
-# radius = 3
-# blurred_image = original_img.filter(ImageFilter.GaussianBlur(radius))
-
-# downsampled_img = original_img.resize((512//8, 512//8), Image.BICUBIC).resize((512, 512), Image.BICUBIC)
-# downsampled_blurred_img = blurred_image.resize((512//8, 512//8), Image.BICUBIC).resize((512, 512), Image.BICUBIC)
 
 
 # %%
