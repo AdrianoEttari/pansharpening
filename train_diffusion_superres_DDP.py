@@ -303,11 +303,13 @@ class Diffusion:
         it from the last snapshot.
         '''
         from collections import OrderedDict
+        print(self.device)
+        print(self.snapshot_path)
 
-        loc = f"cuda: {self.device}"
-        snapshot = torch.load(self.snapshot_path, map_location=loc)
+        snapshot = torch.load(self.snapshot_path, map_location='cpu')
         model_state = OrderedDict((key.replace('module.', ''), value) for key, value in snapshot['MODEL_STATE'].items())
         self.model.module.load_state_dict(model_state)
+        self.model.module.to(self.device)
         self.epochs_run = snapshot["EPOCHS_RUN"]
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
@@ -605,7 +607,6 @@ if __name__ == '__main__':
     parser.add_argument('--snapshot_name', type=str, default='snapshot.pt')
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--noise_steps', type=int, default=200)
-    # parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--dataset_path', type=str, default=None)
     parser.add_argument('--inp_out_channels', type=int, default=3) # input channels must be the same of the output channels
