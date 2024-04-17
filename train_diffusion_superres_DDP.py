@@ -11,7 +11,7 @@ import imageio
 # import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres
+from utils import get_data_superres, get_data_superres_BSRGAN
 # import copy
 
 from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres
@@ -521,6 +521,7 @@ def launch(args):
     UNet_type = args.UNet_type
     Degradation_type = args.Degradation_type
 
+    print(f'Using {Degradation_type} degradation')
     os.makedirs(snapshot_folder_path, exist_ok=True)
     os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
     
@@ -542,39 +543,43 @@ def launch(args):
 
         train_dataset = get_data_superres(train_path, magnification_factor, 0.5, 'PIL', transform)
         val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, 'PIL', transform)
-
-        train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
-        val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, sampler=DistributedSampler(val_dataset))
-
-        gpu_id = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(int(gpu_id))
-        device = gpu_id
-
-        if UNet_type.lower() == 'attention unet':
-            model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
-        elif UNet_type.lower() == 'residual attention unet':
-            model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
-        else:
-            raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet')
-        print("Num params: ", sum(p.numel() for p in model.parameters()))
-
-        model = DDP(model, device_ids=[device], find_unused_parameters=True)
-
-        snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
-
-        diffusion = Diffusion(
-            noise_schedule=noise_schedule, model=model,
-            snapshot_path=snapshot_path,
-            noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
-            magnification_factor=magnification_factor,device=device,
-            image_size=image_size, model_name=model_name)
         
     elif Degradation_type.lower() == 'bsrgan':
-        pass
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
+
+        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size)
+        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size)
 
     else:
         raise ValueError('The degradation type must be either BSRGAN or BlurDown')
 
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, sampler=DistributedSampler(val_dataset))
+
+    gpu_id = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(int(gpu_id))
+    device = gpu_id
+
+    if UNet_type.lower() == 'attention unet':
+        model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    elif UNet_type.lower() == 'residual attention unet':
+        model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    else:
+        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet')
+    print("Num params: ", sum(p.numel() for p in model.parameters()))
+
+    model = DDP(model, device_ids=[device], find_unused_parameters=True)
+
+    snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
+
+    diffusion = Diffusion(
+        noise_schedule=noise_schedule, model=model,
+        snapshot_path=snapshot_path,
+        noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
+        magnification_factor=magnification_factor,device=device,
+        image_size=image_size, model_name=model_name)
+        
     # Training 
     diffusion.train(
         lr=lr, epochs=epochs, check_preds_epoch=check_preds_epoch,
