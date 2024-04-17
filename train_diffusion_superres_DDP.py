@@ -519,53 +519,61 @@ def launch(args):
     magnification_factor = args.magnification_factor
     loss = args.loss
     UNet_type = args.UNet_type
+    Degradation_type = args.Degradation_type
 
-    init_process_group(backend="nccl") # nccl stands for NVIDIA Collective Communication Library. It is used for distributed comunications across multiple GPUs.
-
-    if image_size % magnification_factor != 0:
-        raise ValueError('The image size must be a multiple of the magnification factor')
-    
     os.makedirs(snapshot_folder_path, exist_ok=True)
     os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
+    
+    init_process_group(backend="nccl") # nccl stands for NVIDIA Collective Communication Library. It is used for distributed comunications across multiple GPUs.
 
-    transform = transforms.Compose([
-    transforms.Resize((image_size, image_size)),
-    ]) # The transforms.ToTensor() is in the get_data_superres function (in there
-    # first is applied this transform to y, then the resize according to the magnification_factor
-    # in order to get the x which is the lr_img and finally the to_tensor for both x
-    # and y is applied)
+    if Degradation_type.lower() == 'blurdown':
+        if image_size % magnification_factor != 0:
+            raise ValueError('The image size must be a multiple of the magnification factor')
+        
+        transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        ]) # The transforms.ToTensor() is in the get_data_superres function (in there
+        # first is applied this transform to y, then the resize according to the magnification_factor
+        # in order to get the x which is the lr_img and finally the to_tensor for both x
+        # and y is applied)
 
-    train_path = f'{dataset_path}/train_original'
-    valid_path = f'{dataset_path}/val_original'
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
 
-    train_dataset = get_data_superres(train_path, magnification_factor, 0.5, 'PIL', transform)
-    val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, 'PIL', transform)
+        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, 'PIL', transform)
 
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
-    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, sampler=DistributedSampler(val_dataset))
+        train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
+        val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, sampler=DistributedSampler(val_dataset))
 
-    gpu_id = int(os.environ["LOCAL_RANK"])
-    torch.cuda.set_device(int(gpu_id))
-    device = gpu_id
+        gpu_id = int(os.environ["LOCAL_RANK"])
+        torch.cuda.set_device(int(gpu_id))
+        device = gpu_id
 
-    if UNet_type.lower() == 'attention unet':
-        model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
-    elif UNet_type.lower() == 'residual attention unet':
-        model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+        if UNet_type.lower() == 'attention unet':
+            model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
+        elif UNet_type.lower() == 'residual attention unet':
+            model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+        else:
+            raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet')
+        print("Num params: ", sum(p.numel() for p in model.parameters()))
+
+        model = DDP(model, device_ids=[device], find_unused_parameters=True)
+
+        snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
+
+        diffusion = Diffusion(
+            noise_schedule=noise_schedule, model=model,
+            snapshot_path=snapshot_path,
+            noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
+            magnification_factor=magnification_factor,device=device,
+            image_size=image_size, model_name=model_name)
+        
+    elif Degradation_type.lower() == 'bsrgan':
+        pass
+
     else:
-        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet')
-    print("Num params: ", sum(p.numel() for p in model.parameters()))
-
-    model = DDP(model, device_ids=[device], find_unused_parameters=True)
-
-    snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
-
-    diffusion = Diffusion(
-        noise_schedule=noise_schedule, model=model,
-        snapshot_path=snapshot_path,
-        noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
-        magnification_factor=magnification_factor,device=device,
-        image_size=image_size, model_name=model_name)
+        raise ValueError('The degradation type must be either BSRGAN or BlurDown')
 
     # Training 
     diffusion.train(
@@ -612,8 +620,9 @@ if __name__ == '__main__':
     parser.add_argument('--inp_out_channels', type=int, default=3) # input channels must be the same of the output channels
     parser.add_argument('--plot_gif_bool', type=bool, default=False)
     parser.add_argument('--loss', type=str)
-    parser.add_argument('--magnification_factor', type=int, default=4)
+    parser.add_argument('--magnification_factor', type=int)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet'
+    parser.add_argument('--Degradation_type', type=str, default='BlurDown') # 'BSRGAN' or 'BlurDown'
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
     launch(args)

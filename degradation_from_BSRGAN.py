@@ -7,11 +7,11 @@ import math
 # from utils import utils_image as util
 
 import random
-from scipy import ndimage
 import scipy
 import scipy.stats as ss
-from scipy.interpolate import interp2d
+from scipy.interpolate import RectBivariateSpline
 from scipy.linalg import orth
+from scipy.ndimage import convolve
 
 
 """
@@ -278,10 +278,10 @@ def shift_pixel(x, sf, upper_left=True):
     y1 = np.clip(y1, 0, h-1)
 
     if x.ndim == 2:
-        x = interp2d(xv, yv, x)(x1, y1)
+        x = RectBivariateSpline(xv, yv, x)(x1, y1)
     if x.ndim == 3:
         for i in range(x.shape[-1]):
-            x[:, :, i] = interp2d(xv, yv, x[:, :, i])(x1, y1)
+            x[:, :, i] = RectBivariateSpline(xv, yv, x[:, :, i])(x1, y1)
 
     return x
 
@@ -417,7 +417,7 @@ def srmd_degradation(x, k, sf=3):
           year={2018}
         }
     '''
-    x = ndimage.filters.convolve(x, np.expand_dims(k, axis=2), mode='wrap')  # 'nearest' | 'mirror'
+    x = convolve(x, np.expand_dims(k, axis=2), mode='wrap')  # 'nearest' | 'mirror'
     x = bicubic_degradation(x, sf=sf)
     return x
 
@@ -444,7 +444,7 @@ def dpsr_degradation(x, k, sf=3):
         }
     '''
     x = bicubic_degradation(x, sf=sf)
-    x = ndimage.filters.convolve(x, np.expand_dims(k, axis=2), mode='wrap')
+    x = convolve(x, np.expand_dims(k, axis=2), mode='wrap')
     return x
 
 
@@ -459,7 +459,7 @@ def classical_degradation(x, k, sf=3):
     Return:
         downsampled LR image
     '''
-    x = ndimage.filters.convolve(x, np.expand_dims(k, axis=2), mode='wrap')
+    x = convolve(x, np.expand_dims(k, axis=2), mode='wrap')
     #x = filters.correlate(x, np.expand_dims(np.flip(k), axis=2))
     st = 0
     return x[st::sf, st::sf, ...]
@@ -500,7 +500,7 @@ def add_blur(img, sf=4):
         k = anisotropic_Gaussian(ksize=2*random.randint(2,11)+3, theta=random.random()*np.pi, l1=l1, l2=l2)
     else:
         k = fspecial('gaussian', 2*random.randint(2,11)+3, wd*random.random())
-    img = ndimage.filters.convolve(img, np.expand_dims(k, axis=2), mode='mirror')
+    img = convolve(img, np.expand_dims(k, axis=2), mode='mirror')
 
     return img
 
@@ -604,7 +604,6 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
     """
     isp_prob, jpeg_prob, scale2_prob = 0.25, 0.9, 0.25
     sf_ori = sf
-
     h1, w1 = img.shape[:2]
     img = img.copy()[:h1 - h1 % sf, :w1 - w1 % sf, ...]  # mod crop
     h, w = img.shape[:2]
@@ -629,7 +628,6 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
         shuffle_order[idx1], shuffle_order[idx2] = shuffle_order[idx2], shuffle_order[idx1]
 
     for i in shuffle_order:
-        # import ipdb; ipdb.set_trace()
         if i == 0:
             img = add_blur(img, sf=sf)
 
@@ -646,7 +644,7 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
                 k = fspecial('gaussian', 25, random.uniform(0.1, 0.6*sf))
                 k_shifted = shift_pixel(k, sf)
                 k_shifted = k_shifted/k_shifted.sum()  # blur with shifted kernel
-                img = ndimage.filters.convolve(img, np.expand_dims(k_shifted, axis=2), mode='mirror')
+                img = convolve(img, np.expand_dims(k_shifted, axis=2), mode='mirror')
                 img = img[0::sf, 0::sf, ...]  # nearest downsampling
             img = np.clip(img, 0.0, 1.0)
 
@@ -784,23 +782,18 @@ if __name__ == '__main__':
 
     img = 'anime_test.jpg'
     img = imread_uint(img, 3)
-    sf = 4
+    sf = 2
     os.makedirs('to_remove', exist_ok=True)
-    for i in range(5):
-        img_lq, img_hq = degradation_bsrgan(img, sf=sf, lq_patchsize=32)
+    for i in range(10):
+        img_lq, img_hq = degradation_bsrgan(img, sf=sf, lq_patchsize=128)
         print(i)
-        lq_nearest =  cv2.resize(single2uint(img_lq), (int(sf*img_lq.shape[1]), int(sf*img_lq.shape[0])), interpolation=0)
-        img_concat = np.concatenate([lq_nearest, single2uint(img_hq)], axis=1)
-        img_concat = np.squeeze(img_concat)
-        if img_concat.ndim == 3:
-            img_concat = img_concat[:, :, [2, 1, 0]]
-        cv2.imwrite(f'./to_remove/prova{i}.jpg', img_concat)
-        
-#    for i in range(10):
-#        img_lq, img_hq = degradation_bsrgan_plus(img, sf=sf, shuffle_prob=0.1, use_sharp=True, lq_patchsize=64)
-#        print(i)
-#        lq_nearest =  cv2.resize(util.single2uint(img_lq), (int(sf*img_lq.shape[1]), int(sf*img_lq.shape[0])), interpolation=0)
-#        img_concat = np.concatenate([lq_nearest, util.single2uint(img_hq)], axis=1)
-#        util.imsave(img_concat, str(i)+'.png')
+        # lq_nearest =  cv2.resize(single2uint(img_lq), (int(sf*img_lq.shape[1]), int(sf*img_lq.shape[0])), interpolation=0)
+        # img_concat = np.concatenate([lq_nearest, single2uint(img_hq)], axis=1)
+        # img_concat = np.squeeze(img_concat)
+        # if img_concat.ndim == 3:
+        #     img_concat = img_concat[:, :, [2, 1, 0]]
+        # cv2.imwrite(f'./to_remove/prova{i}.jpg', img_concat)
 
-#    run utils/utils_blindsr.py
+        # CV2 expects images in BGR format
+        img_lq = single2uint(img_lq)[:, :, [2, 1, 0]]
+        cv2.imwrite(f'./to_remove/prova{i}.jpg', img_lq)
