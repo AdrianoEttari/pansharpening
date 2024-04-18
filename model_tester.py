@@ -9,14 +9,15 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
 
-image_size = 224
+image_size = 512
 input_channels = output_channels = 3
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 device = 'mps'
 noise_schedule='cosine'
 noise_steps = 1500
-dataset_path = os.path.join('celebA_50k')
-magnification_factor = 4
+dataset_path = os.path.join('anime_data_50k')
+magnification_factor = 8
+Degradation_type = 'BlurDown'
 
 transform = transforms.Compose([
     transforms.Resize((image_size, image_size),interpolation=transforms.InterpolationMode.BICUBIC),
@@ -70,7 +71,7 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_
                 snapshot_path=snapshot_path,
                 noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
                 magnification_factor=magnification_factor,device=device,
-                image_size=image_size, model_name=model_name)
+                image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
 
         super_lr_img = diffusion.sample(1, model, test_img_lr, input_channels=3, plot_gif_bool=False)
         super_lr_imgs.append(super_lr_img)
@@ -107,8 +108,11 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_
 #               ['snapshot.pt','snapshot.pt'], test_img_lr, device, test_img_hr)
 # model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
 #               ['snapshot.pt'], test_img_lr, device, test_img_hr)
-model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_celebA_GaussBlur', 
-              'Residual_Attention_UNet_superres_magnification4_celeb50k'],
+# model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_celebA_GaussBlur', 
+#               'Residual_Attention_UNet_superres_magnification4_celeb50k'],
+#               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
+model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_GaussBlur_512', 
+              'Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 
 # sr_test_path = 'sr_satellite_imgs_test'

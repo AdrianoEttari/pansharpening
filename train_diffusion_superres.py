@@ -1,5 +1,5 @@
 import os
-import logging
+# import logging
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
@@ -8,11 +8,11 @@ import torch.utils.data
 import torchvision.transforms as transforms
 from torchvision import datasets
 import imageio
-import numpy as np
+# import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres
-import copy
+from utils import get_data_superres, get_data_superres_BSRGAN
+# import copy
 
 from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres
 
@@ -105,7 +105,8 @@ class Diffusion:
             magnification_factor=4,
             device='cuda',
             image_size=224,
-            model_name='superres'):
+            model_name='superres',
+            Degradation_type='BSRGAN'):
     
         self.noise_steps = noise_steps
         self.beta_start = beta_start
@@ -116,6 +117,7 @@ class Diffusion:
         self.device = device
         self.snapshot_path = snapshot_path
         self.model = model.to(self.device)
+        self.Degradation_type=Degradation_type
         
         # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch (MAYBE WE CAN REMOVE IT FROM HERE)
         self.epochs_run = 0
@@ -237,7 +239,10 @@ class Diffusion:
         frames = []
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
-            x = torch.randn((n, input_channels, self.image_size, self.image_size))
+            if self.Degradation_type.lower() == 'blurdown':
+                x = torch.randn((n, input_channels, self.image_size, self.image_size))
+            elif self.Degradation_type.lower() == 'bsrgan':
+                x = torch.randn((n, input_channels, self.image_size*self.magnification_factor, self.image_size*self.magnification_factor))
             # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
@@ -508,25 +513,38 @@ def launch(args):
     magnification_factor = args.magnification_factor
     loss = args.loss
     UNet_type = args.UNet_type
+    Degradation_type = args.Degradation_type
 
-    if image_size % magnification_factor != 0:
-        raise ValueError('The image size must be a multiple of the magnification factor')
-    
     os.makedirs(snapshot_folder_path, exist_ok=True)
     os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
+    
+    if Degradation_type.lower() == 'blurdown':
+        if image_size % magnification_factor != 0:
+            raise ValueError('The image size must be a multiple of the magnification factor')
+        
+        transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        ]) # The transforms.ToTensor() is in the get_data_superres function (in there
+        # first is applied this transform to y, then the resize according to the magnification_factor
+        # in order to get the x which is the lr_img and finally the to_tensor for both x
+        # and y is applied)
 
-    transform = transforms.Compose([
-    transforms.Resize((image_size, image_size)),
-    ]) # The transforms.ToTensor() is in the get_data_superres function (in there
-    # first is applied this transform to y, then the resize according to the magnification_factor
-    # in order to get the x which is the lr_img and finally the to_tensor for both x
-    # and y is applied)
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
 
-    train_path = f'{dataset_path}/train_original'
-    valid_path = f'{dataset_path}/val_original'
+        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, 'PIL', transform)
+        
+    elif Degradation_type.lower() == 'bsrgan':
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
 
-    train_dataset = get_data_superres(train_path, magnification_factor, 0.5, 'PIL', transform)
-    val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, 'PIL', transform)
+        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size)
+        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size)
+
+    else:
+        raise ValueError('The degradation type must be either BSRGAN or BlurDown')
+
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
@@ -547,7 +565,7 @@ def launch(args):
         snapshot_path=snapshot_path,
         noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
         magnification_factor=magnification_factor,device=device,
-        image_size=image_size, model_name=model_name)
+        image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
 
     # Training 
     diffusion.train(
@@ -595,6 +613,7 @@ if __name__ == '__main__':
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int, default=4)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet'
+    parser.add_argument('--Degradation_type', type=str, default='BlurDown') # 'BSRGAN' or 'BlurDown'
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
     launch(args)

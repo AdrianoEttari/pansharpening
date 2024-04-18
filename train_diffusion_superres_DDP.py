@@ -109,7 +109,8 @@ class Diffusion:
             device='cuda',
             magnification_factor=4,
             image_size=224,
-            model_name='superres'):
+            model_name='superres',
+            Degradation_type='BSRGAN'):
     
         self.noise_steps = noise_steps
         self.beta_start = beta_start
@@ -119,6 +120,7 @@ class Diffusion:
         self.magnification_factor = magnification_factor
         self.device = device
         self.snapshot_path = snapshot_path
+        self.Degradation_type=Degradation_type
         
         self.model = model.to(self.device)
         # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch (MAYBE WE CAN REMOVE IT FROM HERE)
@@ -240,7 +242,10 @@ class Diffusion:
         frames = []
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
-            x = torch.randn((n, input_channels, self.image_size, self.image_size))
+            if self.Degradation_type.lower() == 'blurdown':
+                x = torch.randn((n, input_channels, self.image_size, self.image_size))
+            elif self.Degradation_type.lower() == 'bsrgan':
+                x = torch.randn((n, input_channels, self.image_size*self.magnification_factor, self.image_size*self.magnification_factor))
             # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
@@ -498,6 +503,7 @@ def launch(args):
         magnification_factor: the magnification factor (i.e. the factor by which the image is magnified in the super-resolution task)
         loss: the loss function to use
         UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
+        Degradation_type: the type of degradation to use (BSRGAN, BlurDown)
 
     Output:
         None
@@ -578,7 +584,7 @@ def launch(args):
         snapshot_path=snapshot_path,
         noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
         magnification_factor=magnification_factor,device=device,
-        image_size=image_size, model_name=model_name)
+        image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
         
     # Training 
     diffusion.train(
