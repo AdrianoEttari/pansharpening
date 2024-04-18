@@ -782,18 +782,18 @@ if __name__ == '__main__':
 
     img = 'anime_test.jpg'
     img = imread_uint(img, 3)
-    sf = 2
+    sf = 3
     os.makedirs('to_remove', exist_ok=True)
     for i in range(10):
-        img_lq, img_hq = degradation_bsrgan(img, sf=sf, lq_patchsize=128)
+        img_lq, img_hq = degradation_bsrgan(img, sf=sf, lq_patchsize=64)
         print(i)
-        # lq_nearest =  cv2.resize(single2uint(img_lq), (int(sf*img_lq.shape[1]), int(sf*img_lq.shape[0])), interpolation=0)
-        # img_concat = np.concatenate([lq_nearest, single2uint(img_hq)], axis=1)
-        # img_concat = np.squeeze(img_concat)
-        # if img_concat.ndim == 3:
-        #     img_concat = img_concat[:, :, [2, 1, 0]]
-        # cv2.imwrite(f'./to_remove/prova{i}.jpg', img_concat)
+        lq_nearest =  cv2.resize(single2uint(img_lq), (int(sf*img_lq.shape[1]), int(sf*img_lq.shape[0])), interpolation=0)
+        img_concat = np.concatenate([lq_nearest, single2uint(img_hq)], axis=1)
+        img_concat = np.squeeze(img_concat)
+        if img_concat.ndim == 3:
+            img_concat = img_concat[:, :, [2, 1, 0]]
+        cv2.imwrite(f'./to_remove/prova{i}.jpg', img_concat)
 
         # CV2 expects images in BGR format
-        img_lq = single2uint(img_lq)[:, :, [2, 1, 0]]
-        cv2.imwrite(f'./to_remove/prova{i}.jpg', img_lq)
+        # img_lq = single2uint(img_lq)[:, :, [2, 1, 0]]
+        # cv2.imwrite(f'./to_remove/prova{i}.jpg', img_lq)
