@@ -111,7 +111,56 @@ class get_data_superres_BSRGAN(Dataset):
 
         return x, y
     
+class get_data_superres_BSRGAN_2(Dataset):
+    '''
+    This class allows to store the data in a Dataset that can be used in a DataLoader
+    like that train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True).
 
+    -Input:
+        root_dir: path to the folder where the data is stored. 
+        magnification_factor: factor by which the original images are downsampled.
+        model_input_size: size of the input images to the model.
+        data_format: 'PIL' or 'numpy' or 'torch'. The format of the images in the dataset.
+    -Output:
+        A Dataset object that can be used in a DataLoader.
+
+    __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
+    '''
+    def __init__(self, root_dir, magnification_factor, model_input_size, num_crops):
+        self.root_dir = root_dir
+        self.magnification_factor = magnification_factor
+        self.model_input_size = model_input_size
+        self.original_imgs_dir = os.path.join(self.root_dir)
+        self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
+        self.num_crops = num_crops
+        self.x_images, self.y_images = self.BSR_degradation()
+
+    def BSR_degradation(self):
+        x_images = []
+        y_images = []
+        for i in tqdm(range(len(self.y_filenames))):
+            y_path = os.path.join(self.original_imgs_dir, self.y_filenames[i])
+            for _ in range(self.num_crops):
+                y = imread_uint(y_path, 3)
+                x, y = degradation_bsrgan(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
+                x = single2uint(x)
+                y = single2uint(y)
+                to_tensor = transforms.ToTensor()
+                x = to_tensor(x)
+                y = to_tensor(y)
+                x_images.append(x)
+                y_images.append(y)
+        
+        return x_images, y_images
+
+    def __len__(self):
+        return len(self.x_images)
+
+    def __getitem__(self, idx):
+        x = self.x_images[idx]
+        y = self.y_images[idx]
+
+        return x, y
 
 class data_organizer():
     '''
