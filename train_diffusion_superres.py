@@ -371,7 +371,6 @@ class Diffusion:
             
             model.train()   
             for i,(lr_img,hr_img) in enumerate(pbar_train):
-                
                 lr_img = lr_img.to(self.device)
                 hr_img = hr_img.to(self.device)
 

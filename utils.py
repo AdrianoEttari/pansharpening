@@ -78,8 +78,8 @@ class get_data_superres_BSRGAN(Dataset):
     -Input:
         root_dir: path to the folder where the data is stored. 
         magnification_factor: factor by which the original images are downsampled.
+        model_input_size: size of the input images to the model.
         data_format: 'PIL' or 'numpy' or 'torch'. The format of the images in the dataset.
-        transform: a torchvision.transforms.Compose object with the transformations that will be applied to the images.
     -Output:
         A Dataset object that can be used in a DataLoader.
 
