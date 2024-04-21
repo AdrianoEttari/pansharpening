@@ -555,14 +555,14 @@ def launch(args):
         train_path = f'{dataset_path}/train_original'
         valid_path = f'{dataset_path}/val_original'
 
-        train_dataset = get_data_superres_BSRGAN_2(train_path, magnification_factor, image_size, num_crops=num_crops)
-        val_dataset = get_data_superres_BSRGAN_2(valid_path, magnification_factor, image_size, num_crops=num_crops)
+        train_dataset = get_data_superres_BSRGAN_2(train_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
+        val_dataset = get_data_superres_BSRGAN_2(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
 
     else:
         raise ValueError('The degradation type must be either BSRGAN or BlurDown')
 
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
-    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, sampler=DistributedSampler(val_dataset))
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, sampler=DistributedSampler(train_dataset))
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,shuffle=True, sampler=DistributedSampler(val_dataset))
 
     gpu_id = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(int(gpu_id))

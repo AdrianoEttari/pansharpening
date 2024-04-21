@@ -126,7 +126,7 @@ class get_data_superres_BSRGAN_2(Dataset):
 
     __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
     '''
-    def __init__(self, root_dir, magnification_factor, model_input_size, num_crops):
+    def __init__(self, root_dir, magnification_factor, model_input_size, num_crops, destination_folder=None):
         self.root_dir = root_dir
         self.magnification_factor = magnification_factor
         self.model_input_size = model_input_size
@@ -134,6 +134,8 @@ class get_data_superres_BSRGAN_2(Dataset):
         self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
         self.num_crops = num_crops
         self.x_images, self.y_images = self.BSR_degradation()
+        if destination_folder is not None:
+            self.dataset_saver(destination_folder)
 
     def BSR_degradation(self):
         x_images = []
@@ -152,6 +154,18 @@ class get_data_superres_BSRGAN_2(Dataset):
                 y_images.append(y)
         
         return x_images, y_images
+
+    def dataset_saver(self, destination_folder):
+        os.makedirs(destination_folder, exist_ok=True)
+        os.makedirs(os.path.join(destination_folder, 'lr'), exist_ok=True)
+        os.makedirs(os.path.join(destination_folder, 'hr'), exist_ok=True)
+        for i in range(len(self.x_images)):
+            x = self.x_images[i]
+            y = self.y_images[i]
+            x_path = os.path.join(destination_folder, 'lr',  f"x_{i}.pt")
+            y_path = os.path.join(destination_folder, 'hr',  f"y_{i}.pt")
+            torch.save(x, x_path)
+            torch.save(y, y_path)
 
     def __len__(self):
         return len(self.x_images)
