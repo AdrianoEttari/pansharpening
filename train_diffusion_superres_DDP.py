@@ -11,7 +11,7 @@ import imageio
 # import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres, get_data_superres_BSRGAN
+from utils import get_data_superres, get_data_superres_BSRGAN_2
 # import copy
 
 from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres
@@ -526,6 +526,7 @@ def launch(args):
     loss = args.loss
     UNet_type = args.UNet_type
     Degradation_type = args.Degradation_type
+    num_crops = args.num_crops
 
     print(f'Using {Degradation_type} degradation')
     os.makedirs(snapshot_folder_path, exist_ok=True)
@@ -554,8 +555,8 @@ def launch(args):
         train_path = f'{dataset_path}/train_original'
         valid_path = f'{dataset_path}/val_original'
 
-        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size)
-        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size)
+        train_dataset = get_data_superres_BSRGAN_2(train_path, magnification_factor, image_size, num_crops=num_crops)
+        val_dataset = get_data_superres_BSRGAN_2(valid_path, magnification_factor, image_size, num_crops=num_crops)
 
     else:
         raise ValueError('The degradation type must be either BSRGAN or BlurDown')
@@ -634,6 +635,7 @@ if __name__ == '__main__':
     parser.add_argument('--magnification_factor', type=int)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet'
     parser.add_argument('--Degradation_type', type=str, default='BlurDown') # 'BSRGAN' or 'BlurDown'
+    parser.add_argument('--num_crops', type=int, default=1)
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
     launch(args)

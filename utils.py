@@ -285,15 +285,15 @@ def img_splitter(source_folder, destination_folder, desired_width, threshold_rat
                     counter += 1
 
 if __name__=="__main__":
-    # main_folder = 'DIV2k_split'
-    # data_organizer = data_organizer(main_folder)
-    # data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
-    # for root, dirs, files in os.walk(main_folder):
-    #     for file in files:
-    #         if file == '.DS_Store':
-    #             os.remove(os.path.join(root, file))
+    main_folder = 'DIV2K'
+    data_organizer = data_organizer(main_folder)
+    data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
+    for root, dirs, files in os.walk(main_folder):
+        for file in files:
+            if file == '.DS_Store':
+                os.remove(os.path.join(root, file))
 
-    source_folder = 'satellite_imgs_test'
-    destination_folder = 'satellite_imgs_test_cropped'
-    desired_width = 128
-    img_splitter(source_folder, destination_folder, desired_width)
+    # source_folder = 'satellite_imgs_test'
+    # destination_folder = 'satellite_imgs_test_cropped'
+    # desired_width = 128
+    # img_splitter(source_folder, destination_folder, desired_width)
