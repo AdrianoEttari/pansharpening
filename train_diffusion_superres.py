@@ -11,7 +11,7 @@ import imageio
 # import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres, get_data_superres_BSRGAN
+from utils import get_data_superres, get_data_superres_BSRGAN_2
 # import copy
 
 from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres
@@ -302,8 +302,18 @@ class Diffusion:
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
-        snapshot = torch.load(self.snapshot_path, map_location=self.device)
-        self.model.load_state_dict(snapshot["MODEL_STATE"])
+        # snapshot = torch.load(self.snapshot_path, map_location=self.device)
+        # self.model.load_state_dict(snapshot["MODEL_STATE"])
+        # self.epochs_run = snapshot["EPOCHS_RUN"]
+        # print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
+        from collections import OrderedDict
+        print(self.device)
+        print(self.snapshot_path)
+
+        snapshot = torch.load(self.snapshot_path, map_location='cpu')
+        model_state = OrderedDict((key.replace('module.', ''), value) for key, value in snapshot['MODEL_STATE'].items())
+        self.model.module.load_state_dict(model_state)
+        self.model.module.to(self.device)
         self.epochs_run = snapshot["EPOCHS_RUN"]
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
@@ -513,7 +523,9 @@ def launch(args):
     loss = args.loss
     UNet_type = args.UNet_type
     Degradation_type = args.Degradation_type
+    num_crops = args.num_crops
 
+    print(f'Using {Degradation_type} degradation')
     os.makedirs(snapshot_folder_path, exist_ok=True)
     os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
     
@@ -538,8 +550,8 @@ def launch(args):
         train_path = f'{dataset_path}/train_original'
         valid_path = f'{dataset_path}/val_original'
 
-        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size)
-        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size)
+        train_dataset = get_data_superres_BSRGAN_2(train_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
+        val_dataset = get_data_superres_BSRGAN_2(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
 
     else:
         raise ValueError('The degradation type must be either BSRGAN or BlurDown')
@@ -613,6 +625,7 @@ if __name__ == '__main__':
     parser.add_argument('--magnification_factor', type=int, default=4)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet'
     parser.add_argument('--Degradation_type', type=str, default='BlurDown') # 'BSRGAN' or 'BlurDown'
+    parser.add_argument('--num_crops', type=int, default=1)
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
     launch(args)
