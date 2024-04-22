@@ -97,3 +97,32 @@ for set in sets:
             img.save(file_path)
         elif img.shape[2] != 3:
             os.remove(file_path)
+
+#%%
+import os
+import shutil
+from tqdm import tqdm
+
+anime_data_path = '../anime_data_50k/train_original'
+anime_imgs = os.listdir(anime_data_path)
+train_folder_path = '../anime_data_10k/train_original'
+os.makedirs(train_folder_path, exist_ok=True)
+for i in tqdm(range(10000)):
+    file_name=anime_imgs[i]
+    source_path = os.path.join(anime_data_path,file_name)
+    shutil.copy(source_path, train_folder_path)
+
+val_folder_path = '../anime_data_10k/val_original'
+os.makedirs(val_folder_path, exist_ok=True)
+for i in tqdm(range(10000, 11000)):
+    file_name=anime_imgs[i]
+    source_path = os.path.join(anime_data_path,file_name)
+    shutil.copy(source_path, val_folder_path)
+
+test_folder_path = '../anime_data_10k/test_original'
+os.makedirs(test_folder_path, exist_ok=True)
+for i in tqdm(range(11000, 11500)):
+    file_name=anime_imgs[i]
+    source_path = os.path.join(anime_data_path,file_name)
+    shutil.copy(source_path, test_folder_path)
+# %%
