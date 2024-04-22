@@ -69,48 +69,7 @@ class get_data_superres(Dataset):
         y = to_tensor(y)
 
         return x, y
-    
-class get_data_superres_BSRGAN(Dataset):
-    '''
-    This class allows to store the data in a Dataset that can be used in a DataLoader
-    like that train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True).
-
-    -Input:
-        root_dir: path to the folder where the data is stored. 
-        magnification_factor: factor by which the original images are downsampled.
-        model_input_size: size of the input images to the model.
-        data_format: 'PIL' or 'numpy' or 'torch'. The format of the images in the dataset.
-    -Output:
-        A Dataset object that can be used in a DataLoader.
-
-    __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
-    '''
-    def __init__(self, root_dir, magnification_factor, model_input_size):
-        self.root_dir = root_dir
-        self.magnification_factor = magnification_factor
-        self.model_input_size = model_input_size
-        self.original_imgs_dir = os.path.join(self.root_dir)
-        self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
-
-    def __len__(self):
-        return len(self.y_filenames)
-
-    def __getitem__(self, idx):
-        y_path = os.path.join(self.original_imgs_dir, self.y_filenames[idx])
-        y = imread_uint(y_path, 3)
-
-        # Downsample the original image
-        x, y = degradation_bsrgan(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
         
-        x = single2uint(x)
-        y = single2uint(y)
-
-        to_tensor = transforms.ToTensor()
-        x = to_tensor(x)
-        y = to_tensor(y)
-
-        return x, y
-    
 class get_data_superres_BSRGAN_2(Dataset):
     '''
     This class allows to store the data in a Dataset that can be used in a DataLoader
@@ -120,7 +79,8 @@ class get_data_superres_BSRGAN_2(Dataset):
         root_dir: path to the folder where the data is stored. 
         magnification_factor: factor by which the original images are downsampled.
         model_input_size: size of the input images to the model.
-        data_format: 'PIL' or 'numpy' or 'torch'. The format of the images in the dataset.
+        num_crops: number of crops to be generated from each image.
+        destination_folder: path to the folder where the lr and hr images will be saved.
     -Output:
         A Dataset object that can be used in a DataLoader.
 
@@ -138,6 +98,10 @@ class get_data_superres_BSRGAN_2(Dataset):
             self.dataset_saver(destination_folder)
 
     def BSR_degradation(self):
+        '''
+        This function takes as input the path of the original images, the magnification factor, the model input size
+        and also the the number of crops to be generated from each image. It returns two lists with the lr and hr images.
+        '''
         x_images = []
         y_images = []
         for i in tqdm(range(len(self.y_filenames))):
@@ -153,9 +117,18 @@ class get_data_superres_BSRGAN_2(Dataset):
                 x_images.append(x)
                 y_images.append(y)
         
+        # Shuffle the lists
+        combined = list(zip(x_images, y_images))
+        random.shuffle(combined)
+        x_images[:], y_images[:] = zip(*combined)
+
         return x_images, y_images
 
     def dataset_saver(self, destination_folder):
+        '''
+        This function saves the lr and hr images in the destination_folder with the following paths: 
+        <destination_folder>/lr/x_<i>.pt and <destination_folder>/hr/y_<i>.pt.
+        '''
         os.makedirs(destination_folder, exist_ok=True)
         os.makedirs(os.path.join(destination_folder, 'lr'), exist_ok=True)
         os.makedirs(os.path.join(destination_folder, 'hr'), exist_ok=True)

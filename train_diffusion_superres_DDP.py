@@ -123,7 +123,7 @@ class Diffusion:
         self.Degradation_type=Degradation_type
         
         self.model = model.to(self.device)
-        # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch (MAYBE WE CAN REMOVE IT FROM HERE)
+        # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch
         self.epochs_run = 0
         # If a snapshot exists, we load it
         if os.path.exists(snapshot_path):
@@ -561,8 +561,8 @@ def launch(args):
     else:
         raise ValueError('The degradation type must be either BSRGAN or BlurDown')
 
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, sampler=DistributedSampler(train_dataset))
-    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,shuffle=True, sampler=DistributedSampler(val_dataset))
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,shuffle=False, sampler=DistributedSampler(val_dataset))
 
     gpu_id = int(os.environ["LOCAL_RANK"])
     torch.cuda.set_device(int(gpu_id))
