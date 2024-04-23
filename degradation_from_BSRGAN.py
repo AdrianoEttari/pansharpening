@@ -466,7 +466,8 @@ def classical_degradation(x, k, sf=3):
 
 
 def add_sharpening(img, weight=0.5, radius=50, threshold=10):
-    """USM sharpening. borrowed from real-ESRGAN
+    """
+    USM sharpening. borrowed from real-ESRGAN
     Input image: I; Blurry image: B.
     1. K = I + weight * (I - B)
     2. Mask = 1 if abs(I - B) > threshold, else: 0
@@ -784,9 +785,14 @@ if __name__ == '__main__':
     img = imread_uint(img, 3)
     sf = 3
     os.makedirs('to_remove', exist_ok=True)
-    for i in range(10):
-        img_lq, img_hq = degradation_bsrgan(img, sf=sf, lq_patchsize=64)
-        print(i)
+    import time
+    start = time.time()
+    for i in range(5):
+
+        # img_lq, img_hq = degradation_bsrgan(img, sf=sf, lq_patchsize=64)
+
+        img_lq, img_hq = degradation_bsrgan_plus(img, sf=sf, lq_patchsize=64)
+
         lq_nearest =  cv2.resize(single2uint(img_lq), (int(sf*img_lq.shape[1]), int(sf*img_lq.shape[0])), interpolation=0)
         img_concat = np.concatenate([lq_nearest, single2uint(img_hq)], axis=1)
         img_concat = np.squeeze(img_concat)
@@ -796,4 +802,7 @@ if __name__ == '__main__':
 
         # CV2 expects images in BGR format
         # img_lq = single2uint(img_lq)[:, :, [2, 1, 0]]
-        # cv2.imwrite(f'./to_remove/prova{i}.jpg', img_lq)
+        # img_hq = single2uint(img_hq)[:, :, [2, 1, 0]]
+        # cv2.imwrite(f'./to_remove/lq_{i}.jpg', img_lq)
+        # cv2.imwrite(f'./to_remove/hq_{i}.jpg', img_hq)
+    print(time.time()-start)

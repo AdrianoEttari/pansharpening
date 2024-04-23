@@ -11,7 +11,7 @@ import imageio
 # import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres, get_data_superres_BSRGAN_2
+from utils import get_data_superres, get_data_superres_BSRGAN
 # import copy
 
 from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres
@@ -555,8 +555,8 @@ def launch(args):
         train_path = f'{dataset_path}/train_original'
         valid_path = f'{dataset_path}/val_original'
 
-        train_dataset = get_data_superres_BSRGAN_2(train_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
-        val_dataset = get_data_superres_BSRGAN_2(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
+        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
+        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
 
     else:
         raise ValueError('The degradation type must be either BSRGAN or BlurDown')

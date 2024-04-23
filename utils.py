@@ -7,7 +7,8 @@ from torchvision import transforms
 import shutil
 import random
 from tqdm import tqdm
-from degradation_from_BSRGAN import degradation_bsrgan, single2uint, imread_uint
+from PIL import Image
+from degradation_from_BSRGAN import degradation_bsrgan_plus, single2uint, imread_uint
 
 class get_data_superres(Dataset):
     '''
@@ -70,7 +71,7 @@ class get_data_superres(Dataset):
 
         return x, y
         
-class get_data_superres_BSRGAN_2(Dataset):
+class get_data_superres_BSRGAN(Dataset):
     '''
     This class allows to store the data in a Dataset that can be used in a DataLoader
     like that train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True).
@@ -108,7 +109,7 @@ class get_data_superres_BSRGAN_2(Dataset):
             y_path = os.path.join(self.original_imgs_dir, self.y_filenames[i])
             for _ in range(self.num_crops):
                 y = imread_uint(y_path, 3)
-                x, y = degradation_bsrgan(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
+                x, y = degradation_bsrgan_plus(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
                 x = single2uint(x)
                 y = single2uint(y)
                 to_tensor = transforms.ToTensor()
@@ -127,7 +128,7 @@ class get_data_superres_BSRGAN_2(Dataset):
     def dataset_saver(self, destination_folder):
         '''
         This function saves the lr and hr images in the destination_folder with the following paths: 
-        <destination_folder>/lr/x_<i>.pt and <destination_folder>/hr/y_<i>.pt.
+        <destination_folder>/lr/x_<i>.png and <destination_folder>/hr/y_<i>.png.
         '''
         os.makedirs(destination_folder, exist_ok=True)
         os.makedirs(os.path.join(destination_folder, 'lr'), exist_ok=True)
@@ -135,10 +136,14 @@ class get_data_superres_BSRGAN_2(Dataset):
         for i in range(len(self.x_images)):
             x = self.x_images[i]
             y = self.y_images[i]
-            x_path = os.path.join(destination_folder, 'lr',  f"x_{i}.pt")
-            y_path = os.path.join(destination_folder, 'hr',  f"y_{i}.pt")
-            torch.save(x, x_path)
-            torch.save(y, y_path)
+            x_path = os.path.join(destination_folder, 'lr',  f"x_{i}.png")
+            y_path = os.path.join(destination_folder, 'hr',  f"y_{i}.png")
+            x = x.permute(1, 2, 0).clamp(0, 1).numpy()
+            y = y.permute(1, 2, 0).clamp(0, 1).numpy()
+            x = Image.fromarray((x * 255).astype(np.uint8))
+            y = Image.fromarray((y * 255).astype(np.uint8))
+            x.save(x_path)
+            y.save(y_path)
 
     def __len__(self):
         return len(self.x_images)
