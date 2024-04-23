@@ -112,7 +112,7 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_
 #               'Residual_Attention_UNet_superres_magnification4_celeb50k'],
 #               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_GaussBlur_512', 
-              'Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
+              'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 
 # sr_test_path = 'sr_satellite_imgs_test'
