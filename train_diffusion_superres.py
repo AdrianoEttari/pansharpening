@@ -560,10 +560,12 @@ def launch(args):
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
 
-
+    
     if UNet_type.lower() == 'attention unet':
+        print('Using Attention UNet')
         model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
     elif UNet_type.lower() == 'residual attention unet':
+        print('Using Residual Attention UNet')
         model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
     else:
         raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet')
