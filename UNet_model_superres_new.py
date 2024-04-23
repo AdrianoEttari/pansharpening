@@ -302,6 +302,7 @@ class gating_signal(nn.Module):
         self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding='same', device=device)
         self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
         self.relu = nn.ReLU(inplace=False)
+        self.device = device
 
     def forward(self, x):
         x = self.conv(x)

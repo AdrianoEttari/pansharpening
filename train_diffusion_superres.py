@@ -15,6 +15,7 @@ from utils import get_data_superres, get_data_superres_BSRGAN
 # import copy
 
 from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres
+# from UNet_model_superres_MultiHeadAttention import Residual_Attention_UNet_superres, Attention_UNet_superres
 
 import torch
 import torch.nn as nn
