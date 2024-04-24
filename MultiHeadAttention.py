@@ -24,6 +24,7 @@ def checkpoint(func, inputs, params, flag):
 class CheckpointFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, run_function, length, *args):
+        import ipdb; ipdb.set_trace()
         ctx.run_function = run_function
         ctx.input_tensors = list(args[:length])
         ctx.input_params = list(args[length:])
