@@ -624,7 +624,7 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
             for i in range(len(self.up_channels)-2)])
         
         self.multihead_attentions = nn.ModuleList([
-            SpatialTransformer(in_channels=self.up_channels[i], n_heads=4, d_head=36) \
+            SpatialTransformer(in_channels=self.up_channels[i], n_heads=4, d_head=36, context_dim=144) \
             for i in range(len(self.up_channels)-2)])
         
         self.up_convs = nn.ModuleList([
@@ -688,7 +688,7 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
             gating = gating_signal(x)
             x = simple_conv(x, t)
             attention_input = torch.cat([gating, residual_inputs[-(i+1)]], dim=1)
-            attention = multihead_attention(attention_input)
+            attention = multihead_attention(attention_input, 144)
             x = batch_norm(attention+x)
             x = up_conv(x)
             x = up(x)

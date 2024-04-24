@@ -24,6 +24,7 @@ def checkpoint(func, inputs, params, flag):
 class CheckpointFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, run_function, length, *args):
+        
         ctx.run_function = run_function
         ctx.input_tensors = list(args[:length])
         ctx.input_params = list(args[length:])
@@ -34,7 +35,7 @@ class CheckpointFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, *output_grads):
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         ctx.input_tensors = [x.detach().requires_grad_(True) for x in ctx.input_tensors]
         with torch.enable_grad():
             # Fixes a bug where the first op in run_function modifies the
@@ -119,7 +120,7 @@ def zero_module(module):
 
 
 def Normalize(in_channels):
-    return torch.nn.GroupNorm(num_groups=8, num_channels=in_channels, eps=1e-6, affine=True)
+    return torch.nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True)
 
 
 class LinearAttention(nn.Module):
@@ -249,11 +250,12 @@ class BasicTransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(dim)
         self.norm3 = nn.LayerNorm(dim)
         self.checkpoint = checkpoint
-
+    
     def forward(self, x, context=None):
         return checkpoint(self._forward, (x, context), self.parameters(), self.checkpoint)
 
     def _forward(self, x, context=None):
+        # import ipdb; ipdb.set_trace()
         x = self.attn1(self.norm1(x)) + x
         x = self.attn2(self.norm2(x), context=context) + x
         x = self.ff(self.norm3(x)) + x
@@ -293,6 +295,7 @@ class SpatialTransformer(nn.Module):
                                               padding=0))
 
     def forward(self, x, context=None):
+        import ipdb; ipdb.set_trace()
         # note: if no context is given, cross-attention defaults to self-attention
         b, c, h, w = x.shape
         x_in = x
