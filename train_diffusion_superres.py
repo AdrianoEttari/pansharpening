@@ -391,7 +391,6 @@ class Diffusion:
                 optimizer.zero_grad() # set the gradients to 0
 
                 predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
-
                 if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
                     train_loss = loss_function(predicted_noise, noise)
                 elif loss == 'MSE+Perceptual_imgs':
