@@ -14,8 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres, get_data_superres_BSRGAN
 # import copy
 
-from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres
-# from UNet_model_superres_MultiHeadAttention import Residual_Attention_UNet_superres, Attention_UNet_superres
+from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres
 
 import torch
 import torch.nn as nn
@@ -568,8 +567,11 @@ def launch(args):
     elif UNet_type.lower() == 'residual attention unet':
         print('Using Residual Attention UNet')
         model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    elif UNet_type.lower() == 'residual multihead attention unet':
+        print('Using Residual MultiHead Attention UNet')
+        model = Residual_MultiHeadAttention_UNet_superres(input_channels, output_channels, device).to(device)
     else:
-        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet')
+        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet or Residual MultiHead Attention UNet')
     print("Num params: ", sum(p.numel() for p in model.parameters()))
 
     snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
@@ -626,7 +628,7 @@ if __name__ == '__main__':
     parser.add_argument('--plot_gif_bool', type=bool, default=False)
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int, default=4)
-    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet'
+    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet'
     parser.add_argument('--Degradation_type', type=str, default='BlurDown') # 'BSRGAN' or 'BlurDown'
     parser.add_argument('--num_crops', type=int, default=1)
     args = parser.parse_args()
