@@ -2,7 +2,8 @@ import torch.nn as nn
 import math
 import torch
 import torch.nn.functional as F
-from MultiHeadAttention import SpatialTransformer
+from MultiHeadAttention import MultiHeadAttention
+from einops import rearrange
 
 # https://medium.com/mlearning-ai/self-attention-in-convolutional-neural-networks-172d947afc00
 # https://github.com/fastai/fastai2/blob/master/fastai2/layers.py
@@ -260,34 +261,6 @@ class UpConvBlock(nn.Module):
         x = self.relu(self.batch_norm(self.conv(x)))
         output = self.transform(x)
         return output
-
-class simpleConv(nn.Module):
-    '''
-    '''
-    def __init__(self, in_ch, out_ch, time_emb_dim, device):
-        super().__init__()
-        self.time_mlp =  nn.Linear(time_emb_dim, out_ch, device=device)
-        self.batch_norm = nn.BatchNorm2d(out_ch, device=device)
-        self.relu = nn.ReLU(inplace=False)
-        self.conv = nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding='same', bias=True, device=device)
-
-    def _make_te(self, dim_in, dim_out, device):
-        return torch.nn.Sequential(
-            torch.nn.Linear(dim_in, dim_out, device=device),
-            torch.nn.SiLU(),
-            torch.nn.Linear(dim_out, dim_out, device=device)
-        )
-    
-    def forward(self, x, t):
-        # TIME EMBEDDING
-        time_emb = self.relu(self.time_mlp(t))
-        # EXTEND THE LAST 2 DIMENSIONS
-        time_emb = time_emb[(..., ) + (None, ) * 2]
-        # ADD TIME CHANNEL
-        x = x + time_emb
-        # SECOND CONV
-        x = self.relu(self.batch_norm(self.conv(x)))
-        return x
     
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
@@ -593,7 +566,7 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
         self.conv_upsampled_lr_img = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1)
         
         # DOWNSAMPLE
-        self.conv_blocks = nn.ModuleList([
+        self.conv_blocks_1 = nn.ModuleList([
             ResConvBlock(in_ch=self.down_channels[i],
                       out_ch=self.down_channels[i+1],
                       time_emb_dim=self.time_emb_dim,
@@ -610,31 +583,38 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
                                         time_emb_dim=self.time_emb_dim,
                                         device=self.device)
         
+        self.conv_blocks_2 = nn.ModuleList([
+            ResConvBlock(in_ch=self.up_channels[i],
+                         out_ch=self.up_channels[i],
+                      time_emb_dim=self.time_emb_dim,
+                      device=self.device) \
+            for i in range(len(self.up_channels)-2)])
+        
+        self.multihead_attention_blocks = nn.ModuleList([
+            MultiHeadAttention(self.up_channels[i], 8) \
+            for i in range(len(self.up_channels)-2)])
+
         # UPSAMPLE
         self.gating_signals = nn.ModuleList([
             gating_signal(self.up_channels[i], self.up_channels[i+1], self.device) \
             for i in range(len(self.up_channels)-2)])
-        
-        self.simple_convs = nn.ModuleList([
-            simpleConv(in_ch=self.up_channels[i], out_ch=self.up_channels[i], time_emb_dim=self.time_emb_dim, device=self.device) \
-            for i in range(len(self.up_channels)-2)])
 
         self.batch_norms = nn.ModuleList([
-            nn.BatchNorm2d(self.up_channels[i], device=self.device) \
+            nn.BatchNorm2d(self.up_channels[i], device=device) \
             for i in range(len(self.up_channels)-2)])
         
-        self.multihead_attentions = nn.ModuleList([
-            SpatialTransformer(in_channels=self.up_channels[i], n_heads=4, d_head=36, context_dim=144) \
+        # self.ups = nn.ModuleList([
+        #     UpConvBlock(in_ch=self.up_channels[i], out_ch=self.up_channels[i], time_emb_dim=self.time_emb_dim, device=self.device) \
+        #     for i in range(len(self.up_channels)-2)])
+        
+        self.conv_blocks_3 = nn.ModuleList([
+            ResConvBlock(in_ch=self.up_channels[i],
+                         out_ch=self.up_channels[i+1],
+                      time_emb_dim=self.time_emb_dim,
+                      device=self.device) \
             for i in range(len(self.up_channels)-2)])
         
-        self.up_convs = nn.ModuleList([
-            nn.Conv2d(int(self.up_channels[i]), self.up_channels[i+1], kernel_size=3, stride=1, padding=1, bias=True).to(self.device) \
-            for i in range(len(self.up_channels)-2)])
 
-        self.ups = nn.ModuleList([
-            nn.ConvTranspose2d(int(self.up_channels[i])//2, int(self.up_channels[i])//2, kernel_size=3, stride=2, padding=1, bias=True, output_padding=1, device=device) \
-            for i in range(len(self.up_channels)-2)])
-        
         # OUTPUT
         self.output = nn.Conv2d(self.up_channels[-2], self.out_dim, 1)
 
@@ -672,29 +652,37 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
 
         # UNET (DOWNSAMPLE)        
         residual_inputs = []
-        for i, (conv_block, down) in enumerate(zip(self.conv_blocks, self.downs)):
+        for i, (conv_block, down) in enumerate(zip(self.conv_blocks_1, self.downs)):
             if i == 0:
                 x = conv_block(x, t, x_skip)
             else:
                 x = conv_block(x, t, None)
-            x = down(x)
             residual_inputs.append(x)
+            x = down(x)
         
         # UNET (BOTTLENECK)
         x = self.bottle_neck(x, t, None)
 
         # UNET (UPSAMPLE)
-        for i, (gating_signal, multihead_attention, simple_conv, batch_norm, up_conv, up) in enumerate(zip(self.gating_signals,self.multihead_attentions,self.simple_convs, self.batch_norms, self.up_convs, self.ups)):
+        for i, (gating_signal, multihead_attention_block, conv_block_2, conv_block_3, batch_norm) in enumerate(zip(self.gating_signals,self.multihead_attention_blocks, self.conv_blocks_2, self.conv_blocks_3, self.batch_norms)):
+            try:
+                x = F.interpolate(x, scale_factor=2, mode='bicubic')
+            except:
+                x = F.interpolate(x.to('cpu'), scale_factor=2, mode='bicubic').to(self.device)
             gating = gating_signal(x)
-            x = simple_conv(x, t)
+            x = conv_block_2(x, t, None)
             attention_input = torch.cat([gating, residual_inputs[-(i+1)]], dim=1)
-            attention = multihead_attention(attention_input, 144)
-            x = batch_norm(attention+x)
-            x = up_conv(x)
-            x = up(x)
+            b, c, h, w = attention_input.shape
+            attention_input = attention_input.permute(0, 2, 3, 1)
+            attention_input = rearrange(attention_input, 'b h w c -> b (h w) c')
+            attention_out = multihead_attention_block(attention_input, None)
+            attention_out = rearrange(attention_out, 'b (h w) c -> b c h w', h=h, w=w)
+            x = batch_norm(attention_out + x)
+            # x = up(x, t)
+            x = conv_block_3(x, t, None)
 
         return self.output(x)
-
+    
 if __name__=="__main__":
     # model = Residual_Attention_UNet_superres(device='cpu')
     model = Residual_MultiHeadAttention_UNet_superres(device='cpu')
