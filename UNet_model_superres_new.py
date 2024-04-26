@@ -591,7 +591,7 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
             for i in range(len(self.up_channels)-2)])
         
         self.multihead_attention_blocks = nn.ModuleList([
-            MultiHeadAttention(self.up_channels[i], 8) \
+            MultiHeadAttention(self.up_channels[i], 8, device=self.device) \
             for i in range(len(self.up_channels)-2)])
 
         # UPSAMPLE
@@ -671,7 +671,7 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
                 x = F.interpolate(x.to('cpu'), scale_factor=2, mode='bicubic').to(self.device)
             gating = gating_signal(x)
             x = conv_block_2(x, t, None)
-            attention_input = torch.cat([gating, residual_inputs[-(i+1)]], dim=1)
+            attention_input = torch.cat([gating, residual_inputs[-(i+1)]], dim=1) # residual_inputs[-(i+1)] starts from -1 because i=0
             b, c, h, w = attention_input.shape
             attention_input = attention_input.permute(0, 2, 3, 1)
             attention_input = rearrange(attention_input, 'b h w c -> b (h w) c')

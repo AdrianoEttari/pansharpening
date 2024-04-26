@@ -3,7 +3,7 @@
 conda activate pansharpening
 
 model_name='UNet_Faces_superres_TO_REMOVE'
-python train_diffusion_superres.py --epochs=1 --noise_schedule='cosine' --batch_size=2 --image_size=128 --lr=5e-4 --snapshot_name=snapshot.pt --model_name="$model_name" --noise_steps=2 --device='mps' --dataset_path='anime_data_10k' --inp_out_channels=3 --loss=MSE --magnification_factor=4 --UNet_type='Residual MultiHead Attention UNet' --Degradation_type='BlurDown'
+python train_diffusion_superres.py --epochs=1 --noise_schedule='cosine' --batch_size=1 --image_size=64 --lr=1e-4 --snapshot_name=snapshot.pt --model_name="$model_name" --noise_steps=2 --device='mps' --dataset_path='anime_data_10k' --inp_out_channels=3 --loss=MSE --magnification_factor=4 --UNet_type='Residual MultiHead Attention UNet' --Degradation_type='BlurDown'
 
 # model_name='UNet_Faces_superres_EMA_MSE_CelebA_magnification4'
 # python train_diffusion_superres_EMA.py --epochs=1 --noise_schedule='cosine' --batch_size=2 --image_size=172 --lr=5e-4 --snapshot_name=snapshot.pt --model_name="$model_name" --noise_steps=1500 --device='cpu' --dataset_path='celebA_25k' --inp_out_channels=3 --loss=MSE --magnification_factor=4

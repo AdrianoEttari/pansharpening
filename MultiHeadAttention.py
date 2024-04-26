@@ -18,13 +18,14 @@ def scaled_dot_product(q, k, v, mask=None):
     return values, attention
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads):
+    def __init__(self, d_model, num_heads, device):
         super().__init__()
+        self.device = device
         self.d_model = d_model # 512
         self.num_heads = num_heads # 8
         self.head_dim = d_model // num_heads # 64
-        self.qkv_layer = nn.Linear(d_model , 3 * d_model) # (512, 1536)
-        self.linear_layer = nn.Linear(d_model, d_model) # (512, 512)
+        self.qkv_layer = nn.Linear(d_model , 3 * d_model, device=self.device) # (512, 1536)
+        self.linear_layer = nn.Linear(d_model, d_model, device=self.device) # (512, 512)
     
     def forward(self, x, mask):
         batch_size, sequence_length, d_model  = x.size() # 30 x 200 x 512
