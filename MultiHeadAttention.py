@@ -4,8 +4,6 @@ import math
 import torch.nn.functional as F
 
 
-
-
 def scaled_dot_product(q, k, v, mask=None):
     # q, k, v = 30 x 8 x 200 x 64
     d_k = q.size()[-1] # 64
