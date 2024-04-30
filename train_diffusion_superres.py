@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres, get_data_superres_BSRGAN
 # import copy
 
-from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres
+from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres, Residual_Attention_UNet_superres_2
 
 import torch
 import torch.nn as nn
@@ -391,6 +391,7 @@ class Diffusion:
                 optimizer.zero_grad() # set the gradients to 0
 
                 predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
+
                 if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
                     train_loss = loss_function(predicted_noise, noise)
                 elif loss == 'MSE+Perceptual_imgs':
@@ -429,7 +430,6 @@ class Diffusion:
                     axs[i,2].set_title('Super resolution image')
                     axs[i,3].hist(residual_img.permute(1,2,0).cpu().numpy().ravel())
                     axs[i,3].set_title('Residual image')
-
 
                 plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
 
@@ -566,6 +566,9 @@ def launch(args):
     elif UNet_type.lower() == 'residual attention unet':
         print('Using Residual Attention UNet')
         model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    elif UNet_type.lower() == 'residual attention unet 2':
+        print('Using Residual Attention UNet 2')
+        model = Residual_Attention_UNet_superres_2(input_channels, output_channels, device).to(device)
     elif UNet_type.lower() == 'residual multihead attention unet':
         print('Using Residual MultiHead Attention UNet')
         model = Residual_MultiHeadAttention_UNet_superres(input_channels, output_channels, device).to(device)
@@ -573,7 +576,7 @@ def launch(args):
         print('Using Residual Visual MultiHead Attention UNet')
         model = Residual_Visual_MultiHeadAttention_UNet_superres(input_channels, image_size ,output_channels, device).to(device)
     else:
-        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet or Residual MultiHead Attention UNet or Residual Visual MultiHeadAttention UNet superres')
+        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet or Residual Attention UNet 2 or Residual MultiHead Attention UNet or Residual Visual MultiHeadAttention UNet superres')
     print("Num params: ", sum(p.numel() for p in model.parameters()))
 
     snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
@@ -630,7 +633,7 @@ if __name__ == '__main__':
     parser.add_argument('--plot_gif_bool', type=bool, default=False)
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int, default=4)
-    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet'
+    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual Attention UNet 2' or 'Residual MultiHead Attention UNet' or 'Residual Visual MultiHead Attention UNet'
     parser.add_argument('--Degradation_type', type=str, default='BlurDown') # 'BSRGAN' or 'BlurDown'
     parser.add_argument('--num_crops', type=int, default=1)
     args = parser.parse_args()
