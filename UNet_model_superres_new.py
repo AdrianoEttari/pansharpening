@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from MultiHeadAttention import MultiHeadAttention
 from einops import rearrange
+from Visual_MultiHeadAttention import Visual_MultiHeadAttention
 
 # https://medium.com/mlearning-ai/self-attention-in-convolutional-neural-networks-172d947afc00
 # https://github.com/fastai/fastai2/blob/master/fastai2/layers.py
@@ -683,9 +684,158 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
 
         return self.output(x)
     
+class Residual_Visual_MultiHeadAttention_UNet_superres(nn.Module):
+    def __init__(self, image_channels=3, start_image_size=None, out_dim=3, device='cuda'):
+        super().__init__()
+        self.start_image_size = start_image_size
+        self.image_channels = image_channels
+        # self.down_channels = (16,32,64,128) # Note that there are 4 downsampling layers and 4 upsampling layers.
+        # To understand why len(self.down_channels)=5, you have to imagine that the first layer 
+        # has a Conv2D(16,32), the second layer has a Conv2D(32,64) and the third layer has a Conv2D(64,128)...
+        # self.up_channels = (128,64,32,16)
+        self.down_channels = (6,12,24,48)
+        self.up_channels = (48,24,12,6)
+        self.out_dim = out_dim 
+        self.time_emb_dim = 100 # Refers to the number of dimensions or features used to represent time.
+        self.device = device
+        # It's important to note that the dimensionality of time embeddings should be chosen carefully,
+        # considering the trade-off between model complexity and the amount of available data.
+
+        # INITIAL PROJECTION
+        self.conv0 = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1) # SINCE THERE IS PADDING 1 AND STRIDE 1,  THE OUTPUT IS THE SAME SIZE OF THE INPUT
+
+        # LR ENCODER
+        self.LR_encoder = RRDB(in_channels=image_channels, out_channels=image_channels, num_blocks=3)
+
+        # UPSAMPLE LR IMAGE
+        self.conv_upsampled_lr_img = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1)
+        
+        # DOWNSAMPLE
+        self.conv_blocks_1 = nn.ModuleList([
+            ResConvBlock(in_ch=self.down_channels[i],
+                      out_ch=self.down_channels[i+1],
+                      time_emb_dim=self.time_emb_dim,
+                      device=self.device) \
+            for i in range(len(self.down_channels)-2)])
+        
+        self.downs = nn.ModuleList([
+            nn.Conv2d(self.down_channels[i+1], self.down_channels[i+1], kernel_size=3, stride=2, padding=1, bias=True, device=device)\
+        for i in range(len(self.down_channels)-2)])
+
+        # BOTTLENECK
+        self.bottle_neck = ResConvBlock(in_ch=self.down_channels[-2],
+                                        out_ch=self.down_channels[-1],
+                                        time_emb_dim=self.time_emb_dim,
+                                        device=self.device)
+        
+        self.conv_blocks_2 = nn.ModuleList([
+            ResConvBlock(in_ch=self.up_channels[i],
+                         out_ch=self.up_channels[i],
+                      time_emb_dim=self.time_emb_dim,
+                      device=self.device) \
+            for i in range(len(self.up_channels)-2)])
+        
+        self.visual_multihead_attention_blocks = nn.ModuleList([
+            Visual_MultiHeadAttention(input_channels=self.up_channels[i],image_size=self.size_upsample_evolution()[i], patch_size=(16,16), num_heads=4, device=self.device) \
+            for i in range(len(self.up_channels)-2)])
+
+        # UPSAMPLE
+        self.gating_signals = nn.ModuleList([
+            gating_signal(self.up_channels[i], self.up_channels[i+1], self.device) \
+            for i in range(len(self.up_channels)-2)])
+
+        self.batch_norms = nn.ModuleList([
+            nn.BatchNorm2d(self.up_channels[i], device=device) \
+            for i in range(len(self.up_channels)-2)])
+        
+        self.conv_blocks_3 = nn.ModuleList([
+            ResConvBlock(in_ch=self.up_channels[i],
+                         out_ch=self.up_channels[i+1],
+                      time_emb_dim=self.time_emb_dim,
+                      device=self.device) \
+            for i in range(len(self.up_channels)-2)])
+        
+
+        # OUTPUT
+        self.output = nn.Conv2d(self.up_channels[-2], self.out_dim, 1)
+
+    def size_upsample_evolution(self):
+        downsample = []
+        image_size = self.start_image_size
+        downsample.append(image_size)
+        for i in range(len(self.up_channels)-2):
+            image_size = image_size // 2
+            downsample.append(image_size)
+        return downsample[::-1]
+            
+    # TIME EMBEDDING
+    def pos_encoding(self, t, channels, device):
+        inv_freq = 1.0 / (
+            10000**(torch.arange(0, channels, 2, device= device).float() / channels)
+        )
+        pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc = torch.cat([pos_enc_a, pos_enc_b], dim=-1)
+        return pos_enc
+    
+    def forward(self, x, timestep, lr_img, magnification_factor):
+        t = timestep.unsqueeze(-1).type(torch.float)
+        t = self.pos_encoding(t, self.time_emb_dim, device=self.device)
+
+        # INITIAL CONVOLUTION
+        x = self.conv0(x)
+
+        # LR ENCODER
+        lr_img = self.LR_encoder(lr_img)
+ 
+        # UPSAMPLE LR IMAGE
+        try:
+            upsampled_lr_img = F.interpolate(lr_img, scale_factor=magnification_factor, mode='bicubic')
+        except:
+            upsampled_lr_img = F.interpolate(lr_img.to('cpu'), scale_factor=magnification_factor, mode='bicubic').to(self.device)
+
+        upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img)
+        
+        # SUM THE UP SAMPLED LR IMAGE WITH THE INPUT IMAGE
+        x = x + upsampled_lr_img
+        x_skip = x.clone()
+
+        # UNET (DOWNSAMPLE)        
+        residual_inputs = []
+        for i, (conv_block, down) in enumerate(zip(self.conv_blocks_1, self.downs)):
+            if i == 0:
+                x = conv_block(x, t, x_skip)
+            else:
+                x = conv_block(x, t, None)
+            residual_inputs.append(x)
+            x = down(x)
+
+        # UNET (BOTTLENECK)
+        x = self.bottle_neck(x, t, None)
+
+        # UNET (UPSAMPLE)
+        for i, (gating_signal, visual_multihead_attention_block, conv_block_2, conv_block_3, batch_norm) in enumerate(zip(self.gating_signals,self.visual_multihead_attention_blocks, self.conv_blocks_2, self.conv_blocks_3, self.batch_norms)):
+            try:
+                x = F.interpolate(x, scale_factor=2, mode='bicubic')
+            except:
+                x = F.interpolate(x.to('cpu'), scale_factor=2, mode='bicubic').to(self.device)
+            gating = gating_signal(x)
+            x = conv_block_2(x, t, None)
+            attention_input = torch.cat([gating, residual_inputs[-(i+1)]], dim=1) # residual_inputs[-(i+1)] starts from -1 because i=0
+
+            attention_out = visual_multihead_attention_block(attention_input)
+
+            x = batch_norm(attention_out + x)
+
+            # x = up(x, t)
+            x = conv_block_3(x, t, None)
+
+        return self.output(x)
+    
 if __name__=="__main__":
     # model = Residual_Attention_UNet_superres(device='cpu')
-    model = Residual_MultiHeadAttention_UNet_superres(device='cpu')
+    # model = Residual_MultiHeadAttention_UNet_superres(device='cpu')
+    model = Residual_Visual_MultiHeadAttention_UNet_superres(start_image_size=224,device='cpu')
 
     def print_parameter_count(model):
         total_params = 0
