@@ -1,24 +1,27 @@
 #%%
 import torch
 from UNet_model_superres_new import Residual_Attention_UNet_superres,Attention_UNet_superres,Residual_Attention_UNet_superres_2,Residual_MultiHeadAttention_UNet_superres,Residual_Visual_MultiHeadAttention_UNet_superres
-from PIL import Image
+from PIL import Image, ImageFilter
 from torchvision import transforms
 import numpy as np
 from torch.functional import F
 import matplotlib.pyplot as plt
 import os
 from train_diffusion_superres import Diffusion
+from tqdm import tqdm 
 
-model_name = 'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_BlurDown_512'
+model_name = 'DDP_Residual_Attention_UNet_superres_magnification3_ANIME10k_BSRdegrplus'
 snapshot_path = f'/models_run/{model_name}/weights/snapshot.pt'
 UNet_type = 'Residual Attention UNet'
 noise_schedule = 'cosine'
-image_size = 256
-magnification_factor = 8
+image_size = 512
+magnification_factor = 4
+model_input_size = image_size // magnification_factor
 input_channels = output_channels = 3
-device = 'mps'
-Degradation_type = 'BlurDown'
+device = 'cpu'
+Degradation_type = 'DownBlur'
 noise_steps = 1500
+blur_radius = 0.5
 
 img_test = Image.open('anime_test.jpg')
 transform = transforms.Compose([ transforms.ToTensor()])
@@ -26,8 +29,15 @@ img_test = transform(img_test)
 img_test = img_test[:,:,list(np.arange(50,562))]
 img_test = F.interpolate(img_test.unsqueeze(0), size=(image_size, image_size), mode='bilinear', align_corners=False).squeeze(0)
 plt.imshow(img_test.permute(1,2,0))
+
+# img_test = Image.open('anime_data_10k/test_original/175490.jpg')
+# downsample = transforms.Resize((model_input_size, model_input_size),
+#                                        interpolation=transforms.InterpolationMode.BICUBIC)
+# img_test = downsample(img_test)
+# img_test = img_test.filter(ImageFilter.GaussianBlur(blur_radius))
+# img_test = transforms.ToTensor()(img_test)
 # %%
-model_input_size = 64
+
 number_of_patches = image_size//model_input_size
 
 width_steps = height_steps = np.cumsum(np.repeat(model_input_size,number_of_patches))
@@ -51,14 +61,14 @@ def save_to_pickle(file_path, data):
 os.makedirs('aggregation_sampling',exist_ok=True)
 save_to_pickle(os.path.join('aggregation_sampling','inputs.pkl'), small_imgs)
 # %%
-# small_imgs = load_from_pickle(os.path.join('aggregation_sampling','inputs.pkl'))
+small_imgs = load_from_pickle(os.path.join('aggregation_sampling','inputs.pkl'))
 
-# fig, axs = plt.subplots(number_of_patches,number_of_patches,figsize=(20,20))
-# for i in range(number_of_patches):
-#     for j in range(number_of_patches):
-#         axs[i,j].imshow(small_imgs[i,j].permute(1,2,0))
-#         axs[i,j].axis('off')
-# plt.show()
+fig, axs = plt.subplots(number_of_patches,number_of_patches,figsize=(20,20))
+for i in range(number_of_patches):
+    for j in range(number_of_patches):
+        axs[i,j].imshow(small_imgs[i,j].permute(1,2,0))
+        axs[i,j].axis('off')
+plt.show()
 # %%
 if UNet_type.lower() == 'attention unet':
     print('Using Attention UNet')
@@ -87,21 +97,21 @@ diffusion = Diffusion(
 # %%
 super_lr_imgs = {}
 
-for key,value in small_imgs.items():
-    super_lr_img = diffusion.sample(1, model, value, input_channels=3, plot_gif_bool=False)
-    super_lr_imgs[key] = super_lr_img
+for key,value in tqdm(small_imgs.items()):
+    super_lr_img = diffusion.sample(1, model, value.to(device), input_channels=3, plot_gif_bool=False)
+    super_lr_imgs[key] = super_lr_img.to('cpu')
 
 save_to_pickle(os.path.join('aggregation_sampling','predictions.pkl'), super_lr_imgs)
 
 #%%
-# predictions = load_from_pickle(os.path.join('aggregation_sampling','predictions.pkl'))
+predictions = load_from_pickle(os.path.join('aggregation_sampling','predictions.pkl'))
 
-# fig, axs = plt.subplots(number_of_patches,number_of_patches,figsize=(20,20))
-# for i in range(number_of_patches):
-#     for j in range(number_of_patches):
-#         axs[i,j].imshow(predictions[i,j].permute(1,2,0))
-#         axs[i,j].axis('off')
-# plt.show()
+fig, axs = plt.subplots(number_of_patches,number_of_patches,figsize=(20,20))
+for i in range(number_of_patches):
+    for j in range(number_of_patches):
+        axs[i,j].imshow(predictions[i,j][0].permute(1,2,0))
+        axs[i,j].axis('off')
+plt.show()
 
 # %%
 import torch
