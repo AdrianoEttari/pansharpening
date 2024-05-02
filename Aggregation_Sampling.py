@@ -109,6 +109,11 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 def merge_images(image_dict, grid_size):
+    '''
+    This function merges a dictionary of images into a single image based on their positions in a grid.
+    The image_dict dictionary should have tuples as keys representing the position of the image in the grid (as tuples),
+    and the values should be the tensor images themselves.
+    '''
     # Calculate the size of the merged image
     merged_height = grid_size[0] * next(iter(image_dict.values())).size(1)
     merged_width = grid_size[1] * next(iter(image_dict.values())).size(2)
