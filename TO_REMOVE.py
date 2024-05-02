@@ -11,10 +11,11 @@ from train_diffusion_superres import Diffusion
 from tqdm import tqdm 
 from Aggregation_Sampling import load_from_pickle, save_to_pickle, imgs_splitter, plot_patches, merge_images
 
-model_name = 'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_BlurDown_512'
+model_name = 'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_DownBlur_512'
 magnification_factor = 8
-snapshot_path = f'/models_run/{model_name}/weights/snapshot.pt'
-UNet_type = 'Residual Attention UNet'
+snapshot_folder_path = os.path.join('models_run', model_name, 'weights')
+snapshot_path = os.path.join(snapshot_folder_path, 'snapshot.pt')
+UNet_type = 'residual attention unet'
 noise_schedule = 'cosine'
 image_size = 256
 model_input_size = 64
@@ -79,20 +80,19 @@ position_super_lr_patches_dic = {}
 for key,value in tqdm(position_patch_dic.items()):
     super_lr_patch = diffusion.sample(1, model, value.to(device), input_channels=3, plot_gif_bool=False)
     super_lr_img_test_2 = diffusion.sample(1, model, img_test_2.to(device), input_channels=3, plot_gif_bool=False)
-    import ipdb; ipdb.set_trace()
     position_super_lr_patches_dic[key] = super_lr_patch.to('cpu')
 
 save_to_pickle(os.path.join('aggregation_sampling','predictions.pkl'), position_super_lr_patches_dic)
 
 #%%
-position_super_lr_patches_dic = load_from_pickle(os.path.join('aggregation_sampling','predictions.pkl'))
+# position_super_lr_patches_dic = load_from_pickle(os.path.join('aggregation_sampling','predictions.pkl'))
 
-plot_patches(position_super_lr_patches_dic)
+# plot_patches(position_super_lr_patches_dic)
 # %%
-merged_image = merge_images(position_super_lr_patches_dic)
-plt.imshow(merged_image.permute(1,2,0))
-plt.axis('off')
-plt.show()
+# merged_image = merge_images(position_super_lr_patches_dic)
+# plt.imshow(merged_image.permute(1,2,0))
+# plt.axis('off')
+# plt.show()
 
 
 # %%

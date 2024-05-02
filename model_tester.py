@@ -9,15 +9,15 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
 
-image_size = 224
+image_size = 512
 input_channels = output_channels = 3
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 device = 'mps'
 noise_schedule='cosine'
 noise_steps = 1500
-dataset_path = os.path.join('celebA_50k')
-magnification_factor = 4
-Degradation_type = 'BlurDown'
+dataset_path = os.path.join('anime_data_50k')
+magnification_factor = 8
+Degradation_type = 'DownBlur'
 
 transform = transforms.Compose([
     transforms.Resize((image_size, image_size),interpolation=transforms.InterpolationMode.BICUBIC),
@@ -121,18 +121,20 @@ def model_tester(model_name_list, UNet_type_list, snapshot_name_list, test_img_l
 #              ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 # model_tester(['Residual_Attention_UNet_superres_magnification4_ANIME50k','Attention_UNet_superres_magnification4_ANIME50k'],
 #               ['snapshot.pt','snapshot.pt'], test_img_lr, device, test_img_hr)
-# model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
-#               ['snapshot.pt'], test_img_lr, device, test_img_hr)
+model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_DownBlur_512'],
+             ['residual attention unet'],
+              ['snapshot.pt'], test_img_lr, device, test_img_hr)
 # model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_celebA_GaussBlur', 
 #               'Residual_Attention_UNet_superres_magnification4_celeb50k'],
 #               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 # model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_GaussBlur_512', 
 #               'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
 #               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
-model_tester(['DDP_Residual_Attention_UNet2_superres_magnification4_celebA_BlurDown', 
-              'DDP_Residual_Attention_UNet_superres_magnification4_celebA_BlurDown'],
-              ['residual attention unet 2', 'residual attention unet'],
-              ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
+# model_tester(['DDP_Residual_Attention_UNet2_superres_magnification4_celebA_BlurDown', 
+#               'DDP_Residual_Attention_UNet_superres_magnification4_celebA_BlurDown'],
+#               ['residual attention unet 2', 'residual attention unet'],
+#               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
+
 
 # sr_test_path = 'sr_satellite_imgs_test'
 # for test_img_lr_path in os.listdir(folder_test_img_lr_path):
