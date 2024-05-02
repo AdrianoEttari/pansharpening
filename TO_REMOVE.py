@@ -33,12 +33,12 @@ img_test = img_test[:,:,list(np.arange(50,562))]
 img_test = F.interpolate(img_test.unsqueeze(0), size=(image_size, image_size), mode='bicubic', align_corners=False).squeeze(0)
 plt.imshow(img_test.permute(1,2,0))
 
-img_test_2 = Image.open('anime_data_10k/test_original/175490.jpg')
-downsample = transforms.Resize((512//magnification_factor, 512//magnification_factor),
-                                       interpolation=transforms.InterpolationMode.BICUBIC)
-img_test_2 = downsample(img_test_2)
-img_test_2 = img_test_2.filter(ImageFilter.GaussianBlur(blur_radius))
-img_test_2 = transforms.ToTensor()(img_test_2)
+# img_test_2 = Image.open('anime_data_10k/test_original/175490.jpg')
+# downsample = transforms.Resize((512//magnification_factor, 512//magnification_factor),
+#                                        interpolation=transforms.InterpolationMode.BICUBIC)
+# img_test_2 = downsample(img_test_2)
+# img_test_2 = img_test_2.filter(ImageFilter.GaussianBlur(blur_radius))
+# img_test_2 = transforms.ToTensor()(img_test_2)
 # %%
 position_patch_dic = imgs_splitter(img_test, number_of_patches, model_input_size)
 
