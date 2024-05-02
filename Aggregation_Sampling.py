@@ -46,9 +46,39 @@ def plot_patches(position_patch_dic):
     fig, axs = plt.subplots(n_patches_row,n_patches_col,figsize=(10,10))
     for i in range(n_patches_row):
         for j in range(n_patches_col):
-            axs[i,j].imshow(position_patch_dic[i,j].permute(1,2,0))
-            axs[i,j].axis('off')
+            if len(position_patch_dic[i,j].shape)==4:
+                axs[i,j].imshow(position_patch_dic[i,j][0].permute(1,2,0))
+                axs[i,j].axis('off')
+            else:
+                axs[i,j].imshow(position_patch_dic[i,j].permute(1,2,0))
+                axs[i,j].axis('off')
     plt.show()
+
+# def merge_images(image_dict):
+#     '''
+#     This function merges a dictionary of images into a single image based on their positions in a grid.
+#     The image_dict dictionary should have tuples as keys representing the position of the image in the grid (as tuples),
+#     and the values should be the tensor images themselves.
+#     '''
+#     grid_size = list(image_dict.keys())[-1]
+#     # Calculate the size of the merged image
+#     merged_height = grid_size[0] * next(iter(image_dict.values())).size(1)
+#     merged_width = grid_size[1] * next(iter(image_dict.values())).size(2)
+
+#     # Create a blank canvas for the merged image
+#     merged_image = torch.zeros(3, merged_height, merged_width)
+
+#     # Merge images onto the canvas based on their positions
+#     for position, image in image_dict.items():
+#         row_start = position[0] * image.size(1)
+#         row_end = row_start + image.size(1)
+#         col_start = position[1] * image.size(2)
+#         col_end = col_start + image.size(2)
+
+#         merged_image[:, row_start:row_end, col_start:col_end] = image
+
+#     return merged_image
+
 
 def merge_images(image_dict):
     '''
@@ -56,8 +86,11 @@ def merge_images(image_dict):
     The image_dict dictionary should have tuples as keys representing the position of the image in the grid (as tuples),
     and the values should be the tensor images themselves.
     '''
-    grid_size = image_dict.keys()[len(image_dict)-1]
+    for key, value in image_dict.items():
+        if len(value.shape) == 4:
+            image_dict[key] = value.squeeze(0)
     # Calculate the size of the merged image
+    grid_size = (int(np.sqrt(len(image_dict))),int(np.sqrt(len(image_dict))))
     merged_height = grid_size[0] * next(iter(image_dict.values())).size(1)
     merged_width = grid_size[1] * next(iter(image_dict.values())).size(2)
 
@@ -74,6 +107,8 @@ def merge_images(image_dict):
         merged_image[:, row_start:row_end, col_start:col_end] = image
 
     return merged_image
+
+
 class Aggregation_Sampling():
     pass
 

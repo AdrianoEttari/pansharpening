@@ -75,24 +75,25 @@ diffusion = Diffusion(
         magnification_factor=magnification_factor,device=device,
         image_size=512, model_name=model_name, Degradation_type=Degradation_type)
 # %%
-position_super_lr_patches_dic = {}
+# position_super_lr_patches_dic = {}
 
-for key,value in tqdm(position_patch_dic.items()):
-    super_lr_patch = diffusion.sample(1, model, value.to(device), input_channels=3, plot_gif_bool=False)
-    super_lr_img_test_2 = diffusion.sample(1, model, img_test_2.to(device), input_channels=3, plot_gif_bool=False)
-    position_super_lr_patches_dic[key] = super_lr_patch.to('cpu')
+# for key,value in tqdm(position_patch_dic.items()):
+#     super_lr_patch = diffusion.sample(1, model, value.to(device), input_channels=3, plot_gif_bool=False)
+#     super_lr_img_test_2 = diffusion.sample(1, model, img_test_2.to(device), input_channels=3, plot_gif_bool=False)
+#     position_super_lr_patches_dic[key] = super_lr_patch.to('cpu')
 
-save_to_pickle(os.path.join('aggregation_sampling','predictions.pkl'), position_super_lr_patches_dic)
+# save_to_pickle(os.path.join('aggregation_sampling','predictions.pkl'), position_super_lr_patches_dic)
 
 #%%
-# position_super_lr_patches_dic = load_from_pickle(os.path.join('aggregation_sampling','predictions.pkl'))
+position_super_lr_patches_dic = load_from_pickle(os.path.join('aggregation_sampling','predictions.pkl'))
 
-# plot_patches(position_super_lr_patches_dic)
+plot_patches(position_super_lr_patches_dic)
+
 # %%
-# merged_image = merge_images(position_super_lr_patches_dic)
-# plt.imshow(merged_image.permute(1,2,0))
-# plt.axis('off')
-# plt.show()
+merged_image = merge_images(position_super_lr_patches_dic)
+plt.imshow(merged_image.permute(1,2,0))
+plt.axis('off')
+plt.show()
 
 
 # %%
