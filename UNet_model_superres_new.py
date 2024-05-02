@@ -156,7 +156,6 @@ class AttentionBlock_2(nn.Module):
         result = self.result(upsample_psi * x)
         return result
     
-    
 class ResConvBlock(nn.Module):
     '''
     This class defines a residual convolutional block that is used in the downsampling and bottleneck 
