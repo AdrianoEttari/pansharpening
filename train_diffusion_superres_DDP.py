@@ -242,10 +242,12 @@ class Diffusion:
         frames = []
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
-            if self.Degradation_type.lower() == 'blurdown':
+            if self.Degradation_type.lower() == 'downblur':
                 x = torch.randn((n, input_channels, self.image_size, self.image_size))
             elif self.Degradation_type.lower() == 'bsrgan':
                 x = torch.randn((n, input_channels, self.image_size*self.magnification_factor, self.image_size*self.magnification_factor))
+            else:
+                raise ValueError('The degradation type must be either BSRGAN or DownBlur')
             # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
@@ -503,7 +505,7 @@ def launch(args):
         magnification_factor: the magnification factor (i.e. the factor by which the image is magnified in the super-resolution task)
         loss: the loss function to use
         UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
-        Degradation_type: the type of degradation to use (BSRGAN, BlurDown)
+        Degradation_type: the type of degradation to use (BSRGAN, DownBlur)
 
     Output:
         None
@@ -534,7 +536,7 @@ def launch(args):
     
     init_process_group(backend="nccl") # nccl stands for NVIDIA Collective Communication Library. It is used for distributed comunications across multiple GPUs.
 
-    if Degradation_type.lower() == 'blurdown':
+    if Degradation_type.lower() == 'downblur':
         if image_size % magnification_factor != 0:
             raise ValueError('The image size must be a multiple of the magnification factor')
         
@@ -559,7 +561,7 @@ def launch(args):
         val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
 
     else:
-        raise ValueError('The degradation type must be either BSRGAN or BlurDown')
+        raise ValueError('The degradation type must be either BSRGAN or DownBlur')
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,shuffle=False, sampler=DistributedSampler(val_dataset))
@@ -647,7 +649,7 @@ if __name__ == '__main__':
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet' or 'Residual Attention UNet 2'
-    parser.add_argument('--Degradation_type', type=str, default='BlurDown') # 'BSRGAN' or 'BlurDown'
+    parser.add_argument('--Degradation_type', type=str, default='DownBlur') # 'BSRGAN' or 'DownBlur'
     parser.add_argument('--num_crops', type=int, default=1)
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
