@@ -9,14 +9,14 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
 
-image_size = 512
+image_size = 224
 input_channels = output_channels = 3
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 device = 'mps'
 noise_schedule='cosine'
 noise_steps = 1500
-dataset_path = os.path.join('anime_data_50k')
-magnification_factor = 8
+dataset_path = os.path.join('celebA_50k')
+magnification_factor = 4
 Degradation_type = 'BlurDown'
 
 transform = transforms.Compose([
@@ -52,16 +52,31 @@ test_img_hr = test_dataset[110][1]
 #     ])
 
 #%% 
-from UNet_model_superres_new import Attention_UNet_superres,Residual_Attention_UNet_superres
+from UNet_model_superres_new import Attention_UNet_superres,Residual_Attention_UNet_superres,Residual_Attention_UNet_superres_2,Residual_MultiHeadAttention_UNet_superres,Residual_Visual_MultiHeadAttention_UNet_superres
 
-def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_img_hr=None, save_path=None):
+def model_tester(model_name_list, UNet_type_list, snapshot_name_list, test_img_lr, device, test_img_hr=None, save_path=None):
     super_lr_imgs = []
-    for model_name, snapshot_name in zip(model_name_list, snapshot_name_list):
+    for model_name, UNet_type, snapshot_name in zip(model_name_list,UNet_type_list, snapshot_name_list):
         snapshot_folder_path = os.path.join('models_run', model_name, 'weights')
-        if 'residual' in model_name.lower():
-            model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
-        else:
+
+        if UNet_type.lower() == 'attention unet':
+            print('Using Attention UNet')
             model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
+        elif UNet_type.lower() == 'residual attention unet':
+            print('Using Residual Attention UNet')
+            model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+        elif UNet_type.lower() == 'residual attention unet 2':
+            print('Using Residual Attention UNet 2')
+            model = Residual_Attention_UNet_superres_2(input_channels, output_channels, device).to(device)
+        elif UNet_type.lower() == 'residual multihead attention unet':
+            print('Using Residual MultiHead Attention UNet')
+            model = Residual_MultiHeadAttention_UNet_superres(input_channels, output_channels, device).to(device)
+        elif UNet_type.lower() == 'residual visual multihead attention unet':
+            print('Using Residual Visual MultiHead Attention UNet')
+            model = Residual_Visual_MultiHeadAttention_UNet_superres(input_channels, image_size ,output_channels, device).to(device)
+        else:
+            raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet or Residual Attention UNet 2 or Residual MultiHead Attention UNet or Residual Visual MultiHeadAttention UNet superres')
+
         snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
 
         image_size = test_img_lr.shape[-1] * magnification_factor
@@ -111,8 +126,12 @@ def model_tester(model_name_list, snapshot_name_list, test_img_lr, device, test_
 # model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_celebA_GaussBlur', 
 #               'Residual_Attention_UNet_superres_magnification4_celeb50k'],
 #               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
-model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_GaussBlur_512', 
-              'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
+# model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_GaussBlur_512', 
+#               'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_512'],
+#               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
+model_tester(['DDP_Residual_Attention_UNet2_superres_magnification4_celebA_BlurDown', 
+              'DDP_Residual_Attention_UNet_superres_magnification4_celebA_BlurDown'],
+              ['residual attention unet 2', 'residual attention unet'],
               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 
 # sr_test_path = 'sr_satellite_imgs_test'

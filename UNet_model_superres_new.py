@@ -97,13 +97,14 @@ class AttentionBlock(nn.Module):
         Returns:
             torch.Tensor: The output of the attention mechanism applied to the input data.
         '''
-        g1 = self.w_g(g)
-        x1 = self.w_x(x)
-        psi = self.relu(g1 + x1)
-        psi = self.psi(psi)
-        upsample_psi = F.interpolate(psi, scale_factor=2, mode='nearest')
-        upsample_psi = upsample_psi.repeat_interleave(repeats=x.shape[1], dim=1)
-        result = self.result(upsample_psi * x)
+        # g: 1,128,28,28 # x: 1,128,56,56
+        g1 = self.w_g(g) # 1,128,28,28
+        x1 = self.w_x(x) # 1,128,28,28
+        psi = self.relu(g1 + x1) # 1,128,28,28
+        psi = self.psi(psi) # 1,1,28,28
+        upsample_psi = F.interpolate(psi, scale_factor=2, mode='nearest') # 1,1,56,56
+        upsample_psi = upsample_psi.repeat_interleave(repeats=x.shape[1], dim=1) # 1,128,56,56 (repeats the 1 channel to 128)
+        result = self.result(upsample_psi * x) # 1,128,56,56
         return result
   
 class AttentionBlock_2(nn.Module):
