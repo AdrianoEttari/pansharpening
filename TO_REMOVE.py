@@ -91,9 +91,102 @@ plot_patches(position_super_lr_patches_dic)
 
 # %%
 merged_image = merge_images(position_super_lr_patches_dic)
+merged_image = torch.clamp(merged_image, 0, 1)
 plt.imshow(merged_image.permute(1,2,0))
 plt.axis('off')
 plt.show()
 
+print(f'From {img_test.shape} to {merged_image.shape}')
+# %%
+tensor_to_pil = transforms.ToPILImage()
+img_test = torch.clamp(img_test, 0, 1)
+pil_img_test = tensor_to_pil(img_test)
+pil_img_test = pil_img_test.resize((1024,1024), Image.BICUBIC)
+pil_merged_image = tensor_to_pil(merged_image)
+pil_merged_image = pil_merged_image.resize((1024,1024), Image.BICUBIC)
+pil_img_test.save(os.path.join('lr_img_collage.png'))
+pil_merged_image.save(os.path.join('super_lr_img_collage.png'))
+# %%
+from Aggregation_Sampling import ImageSpliterTh
+from PIL import Image
+from torchvision import transforms
+import matplotlib.pyplot as plt
+
+img_test = Image.open('anime_test.jpg')
+transform = transforms.Compose([transforms.Resize((512,512)), transforms.ToTensor()])
+img_test = transform(img_test).unsqueeze(0)
+
+pch_size = 64
+stride = 59
+aggregation_sampling = ImageSpliterTh(img_test, pch_size, stride, sf=1)
 
 # %%
+print(aggregation_sampling.num_pchs)
+for im_lq_pch, index_infos in aggregation_sampling:
+    print(im_lq_pch.shape, index_infos)
+    plt.imshow(im_lq_pch[0].permute(1,2,0))
+    plt.show()
+print(aggregation_sampling.num_pchs)
+# %%
+
+im_spliter = ImageSpliterTh(img_test, pch_size, stride, sf=1)
+for im_lq_pch, index_infos in im_spliter:
+    # seed_everything(opt.seed)
+    # init_latent = model.get_first_stage_encoding(model.encode_first_stage(im_lq_pch))  # move to latent space
+    # text_init = ['']*opt.n_samples
+    # semantic_c = model.cond_stage_model(text_init)
+    noise = torch.randn_like(init_latent)
+    # If you would like to start from the intermediate steps, you can add noise to LR to the specific steps.
+    # t = repeat(torch.tensor([999]), '1 -> b', b=im_lq_bs.size(0))
+    # t = t.to(device).long()
+    # x_T = model.q_sample_respace(x_start=init_latent, t=t, sqrt_alphas_cumprod=sqrt_alphas_cumprod, sqrt_one_minus_alphas_cumprod=sqrt_one_minus_alphas_cumprod, noise=noise)
+    # x_T = noise
+    # samples, _ = model.sample_canvas(cond=semantic_c, struct_cond=init_latent, batch_size=im_lq_pch.size(0), timesteps=opt.ddpm_steps, time_replace=opt.ddpm_steps, x_T=x_T, return_intermediates=True, tile_size=int(opt.input_size/8), tile_overlap=opt.tile_overlap, batch_size_sample=opt.n_samples)
+    # _, enc_fea_lq = vq_model.encode(im_lq_pch)
+    x_samples = vq_model.decode(samples * 1. / model.scale_factor, enc_fea_lq)
+    if opt.colorfix_type == 'adain':
+        x_samples = adaptive_instance_normalization(x_samples, im_lq_pch)
+    elif opt.colorfix_type == 'wavelet':
+        x_samples = wavelet_reconstruction(x_samples, im_lq_pch)
+    im_spliter.update_gaussian(x_samples, index_infos)
+im_sr = im_spliter.gather()
+im_sr = torch.clamp((im_sr+1.0)/2.0, min=0.0, max=1.0)
+#%%
+
+init_latent = model.get_first_stage_encoding(model.encode_first_stage(im_lq_bs))  # move to latent space
+text_init = ['']*opt.n_samples
+semantic_c = model.cond_stage_model(text_init)
+noise = torch.randn_like(init_latent)
+# If you would like to start from the intermediate steps, you can add noise to LR to the specific steps.
+t = repeat(torch.tensor([999]), '1 -> b', b=im_lq_bs.size(0))
+t = t.to(device).long()
+x_T = model.q_sample_respace(x_start=init_latent, t=t, sqrt_alphas_cumprod=sqrt_alphas_cumprod, sqrt_one_minus_alphas_cumprod=sqrt_one_minus_alphas_cumprod, noise=noise)
+# x_T = noise
+samples, _ = model.sample_canvas(cond=semantic_c, struct_cond=init_latent, batch_size=im_lq_bs.size(0), timesteps=opt.ddpm_steps, time_replace=opt.ddpm_steps, x_T=x_T, return_intermediates=True, tile_size=int(opt.input_size/8), tile_overlap=opt.tile_overlap, batch_size_sample=opt.n_samples)
+_, enc_fea_lq = vq_model.encode(im_lq_bs)
+x_samples = vq_model.decode(samples * 1. / model.scale_factor, enc_fea_lq)
+if opt.colorfix_type == 'adain':
+    x_samples = adaptive_instance_normalization(x_samples, im_lq_bs)
+elif opt.colorfix_type == 'wavelet':
+    x_samples = wavelet_reconstruction(x_samples, im_lq_bs)
+im_sr = torch.clamp((x_samples+1.0)/2.0, min=0.0, max=1.0)
+
+if upsample_scale > opt.upscale:
+    im_sr = F.interpolate(
+                im_sr,
+                size=(int(im_lq_bs.size(-2)*opt.upscale/upsample_scale),
+                    int(im_lq_bs.size(-1)*opt.upscale/upsample_scale)),
+                mode='bicubic',
+                )
+    im_sr = torch.clamp(im_sr, min=0.0, max=1.0)
+
+im_sr = im_sr.cpu().numpy().transpose(0,2,3,1)*255   # b x h x w x c
+
+if flag_pad:
+    im_sr = im_sr[:, :ori_h, :ori_w, ]
+
+for jj in range(im_lq_bs.shape[0]):
+    img_name = str(Path(im_path_bs[jj]).name)
+    basename = os.path.splitext(os.path.basename(img_name))[0]
+    outpath = str(Path(opt.outdir)) + '/' + basename + '.png'
+    Image.fromarray(im_sr[jj, ].astype(np.uint8)).save(outpath)
