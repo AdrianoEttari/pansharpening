@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import torch
 from torchvision.transforms import ToTensor, ToPILImage
 
+### ----------------------------------------------------------------------------------- ###
+# OLD METHOD TO SPLIT AND MERGE IMAGES (WITHOUT AGGREGATION SAMPLING)
 def load_from_pickle(file_path):
     '''
     load_from_pickle function loads the data from a pickle file.
@@ -20,7 +22,6 @@ def save_to_pickle(file_path, data):
     with open(file_path, 'wb') as f:
         pickle.dump(data, f)
         
-
 def imgs_splitter(img_to_split, num_patches_per_row_and_col, model_input_size, overlapping=False):
     '''
     This function takes an image tensor and splits it into patches of size model_input_size x model_input_size.
@@ -82,7 +83,7 @@ def merge_images(image_dict):
         merged_image[:, row_start:row_end, col_start:col_end] = image
 
     return merged_image
-
+### ----------------------------------------------------------------------------------- ###
 
 class ImageSpliterTh:
     def __init__(self, im, pch_size, stride, sf=1):
@@ -204,7 +205,7 @@ class ImageSpliterTh:
 
 ### ----------------------------------------------------------------------------------- ###
 # FUNCTIONS FROM StableSR/scripts/wavelet_color_fix.py https://github.com/IceClear/StableSR/blob/main/scripts/wavelet_color_fix.py
-def adain_color_fix(target: Image, source: Image):
+def adain_color_fix(target, source):
     # Convert images to tensors
     to_tensor = ToTensor()
     target_tensor = to_tensor(target).unsqueeze(0)
@@ -219,7 +220,7 @@ def adain_color_fix(target: Image, source: Image):
 
     return result_image
 
-def wavelet_color_fix(target: Image, source: Image):
+def wavelet_color_fix(target, source):
     # Convert images to tensors
     to_tensor = ToTensor()
     target_tensor = to_tensor(target).unsqueeze(0)
@@ -348,7 +349,7 @@ if __name__ == '__main__':
     model_input_size = 64
     number_of_patches = image_size // model_input_size
     input_channels = output_channels = 3
-    device = 'mps'
+    device = 'cuda'
     Degradation_type = 'DownBlur'
     noise_steps = 1500
     blur_radius = 0.5
@@ -359,11 +360,11 @@ if __name__ == '__main__':
     img_test = img_test[:,:,list(np.arange(50,562))]
     img_test = F.interpolate(img_test.unsqueeze(0), size=(image_size, image_size), mode='bicubic', align_corners=False).squeeze(0)
 
-    position_patch_dic = imgs_splitter(img_test, number_of_patches, model_input_size)
-    os.makedirs('aggregation_sampling',exist_ok=True)
-    save_to_pickle(os.path.join('aggregation_sampling','inputs.pkl'), position_patch_dic)
+    # position_patch_dic = imgs_splitter(img_test, number_of_patches, model_input_size)
+    # os.makedirs('aggregation_sampling',exist_ok=True)
+    # save_to_pickle(os.path.join('aggregation_sampling','inputs.pkl'), position_patch_dic)
 
-    position_patch_dic = load_from_pickle(os.path.join('aggregation_sampling','inputs.pkl'))
+    # position_patch_dic = load_from_pickle(os.path.join('aggregation_sampling','inputs.pkl'))
 
     if UNet_type.lower() == 'attention unet':
         print('Using Attention UNet')
@@ -390,23 +391,26 @@ if __name__ == '__main__':
             magnification_factor=magnification_factor,device=device,
             image_size=512, model_name=model_name, Degradation_type=Degradation_type)
     
-    position_super_lr_patches_dic = {}
+    # position_super_lr_patches_dic = {}
 
-    for key,value in tqdm(position_patch_dic.items()):
-        super_lr_patch = diffusion.sample(1, model, value.to(device), input_channels=3, plot_gif_bool=False)
-        position_super_lr_patches_dic[key] = super_lr_patch.to('cpu')
+    # for key,value in tqdm(position_patch_dic.items()):
+    #     super_lr_patch = diffusion.sample(1, model, value.to(device), input_channels=3, plot_gif_bool=False)
+    #     position_super_lr_patches_dic[key] = super_lr_patch.to('cpu')
 
-    save_to_pickle(os.path.join('aggregation_sampling','predictions.pkl'), position_super_lr_patches_dic)
+    # save_to_pickle(os.path.join('aggregation_sampling','predictions.pkl'), position_super_lr_patches_dic)
+    img_test = img_test.unsqueeze(0).to(device)
+    pch_size = 64
+    stride = 59
+    aggregation_sampling = ImageSpliterTh(img_test, pch_size, stride, sf=1)
 
-    #%%
-    # position_super_lr_patches_dic = load_from_pickle(os.path.join('aggregation_sampling','predictions.pkl'))
-
-    # plot_patches(position_super_lr_patches_dic)
-    # %%
-    # merged_image = merge_images(position_super_lr_patches_dic)
-    # plt.imshow(merged_image.permute(1,2,0))
-    # plt.axis('off')
-    # plt.show()
+    im_spliter = ImageSpliterTh(img_test, pch_size, stride, sf=1)
+    for im_lq_pch, index_infos in tqdm(im_spliter):
+        im_sr_pch = diffusion.sample(1, model, im_lq_pch[0].to(device), input_channels=3, plot_gif_bool=False)
+        x_samples = adaptive_instance_normalization(im_sr_pch, im_lq_pch)
+        im_spliter.update_gaussian(x_samples, index_infos)
+    im_sr = im_spliter.gather()
+    transformed_image = ToPILImage()(im_sr.squeeze(0).clamp_(0.0, 1.0))
+    transformed_image.save('aggregation_sampling_image.png')
 
 
 

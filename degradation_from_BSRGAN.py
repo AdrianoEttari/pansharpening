@@ -678,7 +678,6 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
 
     return img, hq
 
-
 def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=True, lq_patchsize=64, isp_model=None):
     """
     This is an extended degradation model by combining
@@ -765,7 +764,53 @@ def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=True, lq_patc
 
     return img, hq
 
+def soft_degradation_bsrgan(img, sf=4, shuffle_prob=0.5, lq_patchsize=64):
+    """
+    This is an extended degradation model by combining
+    the degradation models of BSRGAN and Real-ESRGAN
+    ----------
+    img: HXWXC, [0, 1], its size should be large than (lq_patchsizexsf)x(lq_patchsizexsf)
+    sf: scale factor
+    use_shuffle: the degradation shuffle
 
+    Returns
+    -------
+    img: low-quality patch, size: lq_patchsizeXlq_patchsizeXC, range: [0, 1]
+    hq: corresponding high-quality patch, size: (lq_patchsizexsf)X(lq_patchsizexsf)XC, range: [0, 1]
+    """
+
+    h1, w1 = img.shape[:2]
+    img = img.copy()[:h1 - h1 % sf, :w1 - w1 % sf, ...]  # mod crop
+    h, w = img.shape[:2]
+
+    if h < lq_patchsize*sf or w < lq_patchsize*sf:
+        raise ValueError(f'img size ({h1}X{w1}) is too small!')
+
+    hq = img.copy()
+
+    if random.random() < shuffle_prob:
+        shuffle_order = random.sample(range(3), 3)
+    else:
+        shuffle_order = list(range(3))
+        shuffle_order = random.sample(shuffle_order, len(range(3)))
+
+    for i in shuffle_order:
+        if i == 0:
+            img = add_blur(img, sf=sf)
+        elif i == 1:
+            img = add_resize(img, sf=sf)
+        elif i == 2:
+            img = add_Gaussian_noise(img, noise_level1=2, noise_level2=25)
+        else:
+            print('check the shuffle!')
+
+    # resize to desired size
+    img = cv2.resize(img, (int(1/sf*hq.shape[1]), int(1/sf*hq.shape[0])), interpolation=random.choice([1, 2, 3]))
+
+    # random crop
+    img, hq = random_crop(img, hq, sf, lq_patchsize)
+
+    return img, hq
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -783,16 +828,16 @@ if __name__ == '__main__':
 
     img = 'anime_test.jpg'
     img = imread_uint(img, 3)
-    sf = 3
+    sf = 4
     os.makedirs('to_remove', exist_ok=True)
     import time
     start = time.time()
-    for i in range(5):
+    for i in range(10):
 
         # img_lq, img_hq = degradation_bsrgan(img, sf=sf, lq_patchsize=64)
-
-        img_lq, img_hq = degradation_bsrgan_plus(img, sf=sf, lq_patchsize=64)
-
+        # img_lq, img_hq = degradation_bsrgan_plus(img, sf=sf, lq_patchsize=64)
+        img_lq, img_hq = soft_degradation_bsrgan(img, sf=sf, lq_patchsize=64)
+        print(img_lq.shape, img_hq.shape)
         lq_nearest =  cv2.resize(single2uint(img_lq), (int(sf*img_lq.shape[1]), int(sf*img_lq.shape[0])), interpolation=0)
         img_concat = np.concatenate([lq_nearest, single2uint(img_hq)], axis=1)
         img_concat = np.squeeze(img_concat)

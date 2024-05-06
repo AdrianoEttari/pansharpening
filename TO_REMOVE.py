@@ -107,7 +107,7 @@ pil_merged_image = pil_merged_image.resize((1024,1024), Image.BICUBIC)
 pil_img_test.save(os.path.join('lr_img_collage.png'))
 pil_merged_image.save(os.path.join('super_lr_img_collage.png'))
 # %%
-from Aggregation_Sampling import ImageSpliterTh
+from Aggregation_Sampling import ImageSpliterTh, adaptive_instance_normalization, wavelet_reconstruction
 from PIL import Image
 from torchvision import transforms
 import matplotlib.pyplot as plt
@@ -121,36 +121,22 @@ stride = 59
 aggregation_sampling = ImageSpliterTh(img_test, pch_size, stride, sf=1)
 
 # %%
-print(aggregation_sampling.num_pchs)
-for im_lq_pch, index_infos in aggregation_sampling:
-    print(im_lq_pch.shape, index_infos)
-    plt.imshow(im_lq_pch[0].permute(1,2,0))
-    plt.show()
-print(aggregation_sampling.num_pchs)
+# print(aggregation_sampling.num_pchs)
+# for im_lq_pch, index_infos in aggregation_sampling:
+#     print(im_lq_pch.shape, index_infos)
+#     plt.imshow(im_lq_pch[0].permute(1,2,0))
+#     plt.show()
+# print(aggregation_sampling.num_pchs)
 # %%
-
+import torch
 im_spliter = ImageSpliterTh(img_test, pch_size, stride, sf=1)
 for im_lq_pch, index_infos in im_spliter:
-    # seed_everything(opt.seed)
-    # init_latent = model.get_first_stage_encoding(model.encode_first_stage(im_lq_pch))  # move to latent space
-    # text_init = ['']*opt.n_samples
-    # semantic_c = model.cond_stage_model(text_init)
-    noise = torch.randn_like(init_latent)
-    # If you would like to start from the intermediate steps, you can add noise to LR to the specific steps.
-    # t = repeat(torch.tensor([999]), '1 -> b', b=im_lq_bs.size(0))
-    # t = t.to(device).long()
-    # x_T = model.q_sample_respace(x_start=init_latent, t=t, sqrt_alphas_cumprod=sqrt_alphas_cumprod, sqrt_one_minus_alphas_cumprod=sqrt_one_minus_alphas_cumprod, noise=noise)
-    # x_T = noise
-    # samples, _ = model.sample_canvas(cond=semantic_c, struct_cond=init_latent, batch_size=im_lq_pch.size(0), timesteps=opt.ddpm_steps, time_replace=opt.ddpm_steps, x_T=x_T, return_intermediates=True, tile_size=int(opt.input_size/8), tile_overlap=opt.tile_overlap, batch_size_sample=opt.n_samples)
-    # _, enc_fea_lq = vq_model.encode(im_lq_pch)
-    x_samples = vq_model.decode(samples * 1. / model.scale_factor, enc_fea_lq)
-    if opt.colorfix_type == 'adain':
-        x_samples = adaptive_instance_normalization(x_samples, im_lq_pch)
-    elif opt.colorfix_type == 'wavelet':
-        x_samples = wavelet_reconstruction(x_samples, im_lq_pch)
+    # im_sr_pch = model(im_lq_pch)
+    im_sr_pch = torch.randn([1, 3, 512, 512])
+    x_samples = adaptive_instance_normalization(im_sr_pch, im_lq_pch)
     im_spliter.update_gaussian(x_samples, index_infos)
 im_sr = im_spliter.gather()
-im_sr = torch.clamp((im_sr+1.0)/2.0, min=0.0, max=1.0)
+# im_sr = torch.clamp((im_sr+1.0)/2.0, min=0.0, max=1.0)
 #%%
 
 init_latent = model.get_first_stage_encoding(model.encode_first_stage(im_lq_bs))  # move to latent space

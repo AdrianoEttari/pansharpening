@@ -8,7 +8,7 @@ import shutil
 import random
 from tqdm import tqdm
 from PIL import Image
-from degradation_from_BSRGAN import degradation_bsrgan_plus, single2uint, imread_uint
+from degradation_from_BSRGAN import degradation_bsrgan_plus, single2uint, imread_uint, soft_degradation_bsrgan
 
 class get_data_superres(Dataset):
     '''
@@ -154,6 +154,77 @@ class get_data_superres_BSRGAN(Dataset):
 
         return x, y
 
+class get_data_superres_2(Dataset):
+    '''
+    This class allows to store the data in a Dataset that can be used in a DataLoader
+    like that train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True).
+
+    -Input:
+        root_dir: path to the folder where the data is stored. 
+        magnification_factor: factor by which the original images are downsampled.
+        model_input_size: size of the input images to the model.
+        destination_folder: path to the folder where the lr and hr images will be saved.
+    -Output:
+        A Dataset object that can be used in a DataLoader.
+
+    __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
+    '''
+    def __init__(self, root_dir, magnification_factor, model_input_size, destination_folder=None):
+        self.root_dir = root_dir
+        self.magnification_factor = magnification_factor
+        self.model_input_size = model_input_size
+        self.original_imgs_dir = os.path.join(self.root_dir)
+        self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
+        self.x_images, self.y_images = self.BSR_degradation()
+        if destination_folder is not None:
+            self.dataset_saver(destination_folder)
+
+    def BSR_degradation(self):
+        '''
+        This function takes as input the path of the original images, the magnification factor, the model input size
+        and also the the number of crops to be generated from each image. It returns two lists with the lr and hr images.
+        '''
+        for i in tqdm(range(len(self.y_filenames))):
+            y_path = os.path.join(self.original_imgs_dir, self.y_filenames[i])
+            y = imread_uint(y_path, 3)
+            x, y = soft_degradation_bsrgan(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
+            x = single2uint(x)
+            y = single2uint(y)
+            to_tensor = transforms.ToTensor()
+            x = to_tensor(x)
+            y = to_tensor(y)
+
+        return x, y
+
+    def dataset_saver(self, destination_folder):
+        '''
+        This function saves the lr and hr images in the destination_folder with the following paths: 
+        <destination_folder>/lr/x_<i>.png and <destination_folder>/hr/y_<i>.png.
+        '''
+        os.makedirs(destination_folder, exist_ok=True)
+        os.makedirs(os.path.join(destination_folder, 'lr'), exist_ok=True)
+        os.makedirs(os.path.join(destination_folder, 'hr'), exist_ok=True)
+        for i in range(len(self.x_images)):
+            x = self.x_images[i]
+            y = self.y_images[i]
+            x_path = os.path.join(destination_folder, 'lr',  f"x_{i}.png")
+            y_path = os.path.join(destination_folder, 'hr',  f"y_{i}.png")
+            x = x.permute(1, 2, 0).clamp(0, 1).numpy()
+            y = y.permute(1, 2, 0).clamp(0, 1).numpy()
+            x = Image.fromarray((x * 255).astype(np.uint8))
+            y = Image.fromarray((y * 255).astype(np.uint8))
+            x.save(x_path)
+            y.save(y_path)
+
+    def __len__(self):
+        return len(self.x_images)
+
+    def __getitem__(self, idx):
+        x = self.x_images[idx]
+        y = self.y_images[idx]
+
+        return x, y
+    
 class data_organizer():
     '''
     This class allows to organize the data inside main_folder (provided in the __init__) 

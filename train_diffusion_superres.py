@@ -11,7 +11,7 @@ import imageio
 # import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres, get_data_superres_BSRGAN
+from utils import get_data_superres, get_data_superres_BSRGAN, get_data_superres_2
 # import copy
 
 from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres, Residual_Attention_UNet_superres_2
@@ -554,6 +554,12 @@ def launch(args):
         train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
         val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
 
+    elif Degradation_type.lower() == 'downblurnoise':
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
+
+        train_dataset = get_data_superres_2(train_path, magnification_factor, image_size, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
+        val_dataset = get_data_superres_2(valid_path, magnification_factor, image_size, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
     else:
         raise ValueError('The degradation type must be either BSRGAN or DownBlur')
 
@@ -636,7 +642,7 @@ if __name__ == '__main__':
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int, default=4)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual Attention UNet 2' or 'Residual MultiHead Attention UNet' or 'Residual Visual MultiHead Attention UNet'
-    parser.add_argument('--Degradation_type', type=str, default='DownBlur') # 'BSRGAN' or 'DownBlur'
+    parser.add_argument('--Degradation_type', type=str, default='DownBlur') # 'BSRGAN' or 'DownBlur' or 'DownBlurNoise'
     parser.add_argument('--num_crops', type=int, default=1)
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
