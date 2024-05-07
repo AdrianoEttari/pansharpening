@@ -175,3 +175,4 @@ other/
 .DS_Store
 *.pptx
 *.pt
+*.npy
