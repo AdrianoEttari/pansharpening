@@ -11,10 +11,10 @@ import imageio
 # import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres, get_data_superres_BSRGAN
+from utils import get_data_superres, get_data_superres_BSRGAN, get_data_superres_2
 # import copy
 
-from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres, Residual_Attention_UNet_superres_2
+from UNet_model_superres import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres, Residual_Attention_UNet_superres_2
 
 import torch
 import torch.nn as nn
@@ -550,8 +550,8 @@ def launch(args):
         train_path = f'{dataset_path}/train_original'
         valid_path = f'{dataset_path}/val_original'
 
-        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, 'PIL', transform)
-        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, 'PIL', transform)
+        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, False, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, False, 'PIL', transform)
         
     elif Degradation_type.lower() == 'bsrgan':
         train_path = f'{dataset_path}/train_original'
@@ -560,8 +560,16 @@ def launch(args):
         train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
         val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
 
+    elif Degradation_type.lower() == 'downblurnoise':
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
+
+        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, True, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, True, 'PIL', transform)
+        # train_dataset = get_data_superres_2(train_path, magnification_factor, image_size)
+        # val_dataset = get_data_superres_2(valid_path, magnification_factor, image_size)
     else:
-        raise ValueError('The degradation type must be either BSRGAN or DownBlur')
+        raise ValueError('The degradation type must be either BSRGAN or DownBlur or DownBlurNoise')
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,shuffle=False, sampler=DistributedSampler(val_dataset))
@@ -649,7 +657,7 @@ if __name__ == '__main__':
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet' or 'Residual Attention UNet 2'
-    parser.add_argument('--Degradation_type', type=str, default='DownBlur') # 'BSRGAN' or 'DownBlur'
+    parser.add_argument('--Degradation_type', type=str, default='DownBlur') # 'BSRGAN' or 'DownBlur' or 'DownBlurNoise'
     parser.add_argument('--num_crops', type=int, default=1)
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')

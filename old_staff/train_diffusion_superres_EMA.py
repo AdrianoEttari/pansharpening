@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres
 import copy
 
-from UNet_model_superres_new import Residual_Attention_UNet_superres, Attention_UNet_superres, EMA
+from UNet_model_superres import Residual_Attention_UNet_superres, Attention_UNet_superres, EMA
 
 import torch
 import torch.nn as nn

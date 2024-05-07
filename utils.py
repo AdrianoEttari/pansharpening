@@ -8,7 +8,27 @@ import shutil
 import random
 from tqdm import tqdm
 from PIL import Image
+from scipy.linalg import orth
 from degradation_from_BSRGAN import degradation_bsrgan_plus, single2uint, imread_uint, soft_degradation_bsrgan
+
+
+def add_Gaussian_noise(img, noise_level1=2, noise_level2=25):
+    noise_level = random.randint(noise_level1, noise_level2)
+    rnum = np.random.rand()
+    img = img.permute(1,2,0).numpy()
+    if rnum > 0.6:   # add color Gaussian noise
+        img += np.random.normal(0, noise_level/255.0, img.shape).astype(np.float32)
+    elif rnum < 0.4: # add grayscale Gaussian noise
+        img += np.random.normal(0, noise_level/255.0, (*img.shape[:2], 1)).astype(np.float32)
+    else:            # add  noise
+        L = noise_level2/255.
+        D = np.diag(np.random.rand(3))
+        U = orth(np.random.rand(3,3))
+        conv = np.dot(np.dot(np.transpose(U), D), U)
+        img += np.random.multivariate_normal([0,0,0], np.abs(L**2*conv), img.shape[:2]).astype(np.float32)
+    img = np.clip(img, 0.0, 1.0)
+    img = torch.tensor(img).permute(2,0,1).to(torch.float)
+    return img
 
 class get_data_superres(Dataset):
     '''
@@ -17,23 +37,28 @@ class get_data_superres(Dataset):
 
     -Input:
         root_dir: path to the folder where the data is stored. 
-        magnification_factor: factor by which the original images are downsampled.
-        data_format: 'PIL' or 'numpy' or 'torch'. The format of the images in the dataset.
         transform: a torchvision.transforms.Compose object with the transformations that will be applied to the images.
+        magnification_factor: factor by which the original images are downsampled.
+        original_imgs_dir: path to the folder where the original images are stored.
+        blur_radius: radius of the Gaussian blur that will be applied to the downsampled images.
+        Gauss_noise: boolean. If True, Gaussian noise will be added to the downsampled images.
+        data_format: 'PIL' or 'numpy' or 'torch'. The format of the images in the dataset.
+        y_finelames: list with the names of the images in the original_imgs_dir.
     -Output:
         A Dataset object that can be used in a DataLoader.
 
     __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
     '''
-    def __init__(self, root_dir, magnification_factor, blur_radius=0.5, data_format='PIL', transform=None):
+    def __init__(self, root_dir, magnification_factor, blur_radius=0.5, Gauss_noise=True, data_format='PIL', transform=None):
         self.root_dir = root_dir
         self.transform = transform
         self.magnification_factor = magnification_factor    
         self.original_imgs_dir = os.path.join(self.root_dir)
         self.blur_radius = blur_radius
+        self.Gauss_noise = Gauss_noise
         self.data_format = data_format
         self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
-
+    
     def __len__(self):
         return len(self.y_filenames)
 
@@ -54,21 +79,29 @@ class get_data_superres(Dataset):
             y = self.transform(y)
 
         # Downsample the original image
-
         downsample = transforms.Resize((y.size[0] // self.magnification_factor, y.size[1] // self.magnification_factor),
                                        interpolation=transforms.InterpolationMode.BICUBIC)
         try:
             x = downsample(y)
         except:
             x = downsample(y.to('cpu')).to(y.device)
-
+    
+        # Add blur
         if self.blur_radius > 0:
             x = x.filter(ImageFilter.GaussianBlur(self.blur_radius))
-    
+        elif self.blur_radius == 0:
+            x = x
+
         to_tensor = transforms.ToTensor()
         x = to_tensor(x)
         y = to_tensor(y)
 
+        # Add Gaussian noise
+        if self.Gauss_noise == False:
+            x = x
+        elif self.Gauss_noise == True:
+            x = add_Gaussian_noise(x, noise_level1=2, noise_level2=10)
+            
         return x, y
         
 class get_data_superres_BSRGAN(Dataset):
@@ -163,65 +196,30 @@ class get_data_superres_2(Dataset):
         root_dir: path to the folder where the data is stored. 
         magnification_factor: factor by which the original images are downsampled.
         model_input_size: size of the input images to the model.
-        destination_folder: path to the folder where the lr and hr images will be saved.
     -Output:
         A Dataset object that can be used in a DataLoader.
 
     __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
     '''
-    def __init__(self, root_dir, magnification_factor, model_input_size, destination_folder=None):
+    def __init__(self, root_dir, magnification_factor, model_input_size):
         self.root_dir = root_dir
         self.magnification_factor = magnification_factor
         self.model_input_size = model_input_size
         self.original_imgs_dir = os.path.join(self.root_dir)
         self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
-        self.x_images, self.y_images = self.BSR_degradation()
-        if destination_folder is not None:
-            self.dataset_saver(destination_folder)
-
-    def BSR_degradation(self):
-        '''
-        This function takes as input the path of the original images, the magnification factor, the model input size
-        and also the the number of crops to be generated from each image. It returns two lists with the lr and hr images.
-        '''
-        for i in tqdm(range(len(self.y_filenames))):
-            y_path = os.path.join(self.original_imgs_dir, self.y_filenames[i])
-            y = imread_uint(y_path, 3)
-            x, y = soft_degradation_bsrgan(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
-            x = single2uint(x)
-            y = single2uint(y)
-            to_tensor = transforms.ToTensor()
-            x = to_tensor(x)
-            y = to_tensor(y)
-
-        return x, y
-
-    def dataset_saver(self, destination_folder):
-        '''
-        This function saves the lr and hr images in the destination_folder with the following paths: 
-        <destination_folder>/lr/x_<i>.png and <destination_folder>/hr/y_<i>.png.
-        '''
-        os.makedirs(destination_folder, exist_ok=True)
-        os.makedirs(os.path.join(destination_folder, 'lr'), exist_ok=True)
-        os.makedirs(os.path.join(destination_folder, 'hr'), exist_ok=True)
-        for i in range(len(self.x_images)):
-            x = self.x_images[i]
-            y = self.y_images[i]
-            x_path = os.path.join(destination_folder, 'lr',  f"x_{i}.png")
-            y_path = os.path.join(destination_folder, 'hr',  f"y_{i}.png")
-            x = x.permute(1, 2, 0).clamp(0, 1).numpy()
-            y = y.permute(1, 2, 0).clamp(0, 1).numpy()
-            x = Image.fromarray((x * 255).astype(np.uint8))
-            y = Image.fromarray((y * 255).astype(np.uint8))
-            x.save(x_path)
-            y.save(y_path)
 
     def __len__(self):
-        return len(self.x_images)
+        return len(self.y_filenames)
 
     def __getitem__(self, idx):
-        x = self.x_images[idx]
-        y = self.y_images[idx]
+        y_path = os.path.join(self.original_imgs_dir, self.y_filenames[idx])
+        y = imread_uint(y_path, 3)
+        x, y = soft_degradation_bsrgan(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
+        x = single2uint(x)
+        y = single2uint(y)
+        to_tensor = transforms.ToTensor()
+        x = to_tensor(x)
+        y = to_tensor(y)
 
         return x, y
     
@@ -348,7 +346,7 @@ def img_splitter(source_folder, destination_folder, desired_width, threshold_rat
                     counter += 1
 
 if __name__=="__main__":
-    main_folder = 'DIV2K'
+    main_folder = 'sentinel_data_s1s2'
     data_organizer = data_organizer(main_folder)
     data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
     for root, dirs, files in os.walk(main_folder):

@@ -2,9 +2,9 @@ import torch.nn as nn
 import math
 import torch
 import torch.nn.functional as F
-from MultiHeadAttention import MultiHeadAttention
+from multihead_attention.MultiHeadAttention import MultiHeadAttention
 from einops import rearrange
-from Visual_MultiHeadAttention import Visual_MultiHeadAttention
+from multihead_attention.Visual_MultiHeadAttention import Visual_MultiHeadAttention
 
 class EMA:
     def __init__(self, beta):

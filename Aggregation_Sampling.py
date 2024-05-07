@@ -329,7 +329,7 @@ if __name__ == '__main__':
     # print(position_patch_dic)
     # plot_patches(position_patch_dic)
     import torch
-    from UNet_model_superres_new import Residual_Attention_UNet_superres,Attention_UNet_superres,Residual_Attention_UNet_superres_2,Residual_MultiHeadAttention_UNet_superres,Residual_Visual_MultiHeadAttention_UNet_superres
+    from UNet_model_superres import Residual_Attention_UNet_superres,Attention_UNet_superres,Residual_Attention_UNet_superres_2,Residual_MultiHeadAttention_UNet_superres,Residual_Visual_MultiHeadAttention_UNet_superres
     from PIL import Image, ImageFilter
     from torchvision import transforms
     import numpy as np

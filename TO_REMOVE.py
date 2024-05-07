@@ -1,6 +1,6 @@
 #%%
 import torch
-from UNet_model_superres_new import Residual_Attention_UNet_superres,Attention_UNet_superres,Residual_Attention_UNet_superres_2,Residual_MultiHeadAttention_UNet_superres,Residual_Visual_MultiHeadAttention_UNet_superres
+from UNet_model_superres import Residual_Attention_UNet_superres,Attention_UNet_superres,Residual_Attention_UNet_superres_2,Residual_MultiHeadAttention_UNet_superres,Residual_Visual_MultiHeadAttention_UNet_superres
 from PIL import Image, ImageFilter
 from torchvision import transforms
 import numpy as np
@@ -139,49 +139,85 @@ im_sr = im_spliter.gather()
 # im_sr = torch.clamp((im_sr+1.0)/2.0, min=0.0, max=1.0)
 #%%
 
-init_latent = model.get_first_stage_encoding(model.encode_first_stage(im_lq_bs))  # move to latent space
-text_init = ['']*opt.n_samples
-semantic_c = model.cond_stage_model(text_init)
-noise = torch.randn_like(init_latent)
-# If you would like to start from the intermediate steps, you can add noise to LR to the specific steps.
-t = repeat(torch.tensor([999]), '1 -> b', b=im_lq_bs.size(0))
-t = t.to(device).long()
-x_T = model.q_sample_respace(x_start=init_latent, t=t, sqrt_alphas_cumprod=sqrt_alphas_cumprod, sqrt_one_minus_alphas_cumprod=sqrt_one_minus_alphas_cumprod, noise=noise)
-# x_T = noise
-samples, _ = model.sample_canvas(cond=semantic_c, struct_cond=init_latent, batch_size=im_lq_bs.size(0), timesteps=opt.ddpm_steps, time_replace=opt.ddpm_steps, x_T=x_T, return_intermediates=True, tile_size=int(opt.input_size/8), tile_overlap=opt.tile_overlap, batch_size_sample=opt.n_samples)
-_, enc_fea_lq = vq_model.encode(im_lq_bs)
-x_samples = vq_model.decode(samples * 1. / model.scale_factor, enc_fea_lq)
-if opt.colorfix_type == 'adain':
-    x_samples = adaptive_instance_normalization(x_samples, im_lq_bs)
-elif opt.colorfix_type == 'wavelet':
-    x_samples = wavelet_reconstruction(x_samples, im_lq_bs)
-im_sr = torch.clamp((x_samples+1.0)/2.0, min=0.0, max=1.0)
+# init_latent = model.get_first_stage_encoding(model.encode_first_stage(im_lq_bs))  # move to latent space
+# text_init = ['']*opt.n_samples
+# semantic_c = model.cond_stage_model(text_init)
+# noise = torch.randn_like(init_latent)
+# # If you would like to start from the intermediate steps, you can add noise to LR to the specific steps.
+# t = repeat(torch.tensor([999]), '1 -> b', b=im_lq_bs.size(0))
+# t = t.to(device).long()
+# x_T = model.q_sample_respace(x_start=init_latent, t=t, sqrt_alphas_cumprod=sqrt_alphas_cumprod, sqrt_one_minus_alphas_cumprod=sqrt_one_minus_alphas_cumprod, noise=noise)
+# # x_T = noise
+# samples, _ = model.sample_canvas(cond=semantic_c, struct_cond=init_latent, batch_size=im_lq_bs.size(0), timesteps=opt.ddpm_steps, time_replace=opt.ddpm_steps, x_T=x_T, return_intermediates=True, tile_size=int(opt.input_size/8), tile_overlap=opt.tile_overlap, batch_size_sample=opt.n_samples)
+# _, enc_fea_lq = vq_model.encode(im_lq_bs)
+# x_samples = vq_model.decode(samples * 1. / model.scale_factor, enc_fea_lq)
+# if opt.colorfix_type == 'adain':
+#     x_samples = adaptive_instance_normalization(x_samples, im_lq_bs)
+# elif opt.colorfix_type == 'wavelet':
+#     x_samples = wavelet_reconstruction(x_samples, im_lq_bs)
+# im_sr = torch.clamp((x_samples+1.0)/2.0, min=0.0, max=1.0)
 
-if upsample_scale > opt.upscale:
-    im_sr = F.interpolate(
-                im_sr,
-                size=(int(im_lq_bs.size(-2)*opt.upscale/upsample_scale),
-                    int(im_lq_bs.size(-1)*opt.upscale/upsample_scale)),
-                mode='bicubic',
-                )
-    im_sr = torch.clamp(im_sr, min=0.0, max=1.0)
+# if upsample_scale > opt.upscale:
+#     im_sr = F.interpolate(
+#                 im_sr,
+#                 size=(int(im_lq_bs.size(-2)*opt.upscale/upsample_scale),
+#                     int(im_lq_bs.size(-1)*opt.upscale/upsample_scale)),
+#                 mode='bicubic',
+#                 )
+#     im_sr = torch.clamp(im_sr, min=0.0, max=1.0)
 
-im_sr = im_sr.cpu().numpy().transpose(0,2,3,1)*255   # b x h x w x c
+# im_sr = im_sr.cpu().numpy().transpose(0,2,3,1)*255   # b x h x w x c
 
-if flag_pad:
-    im_sr = im_sr[:, :ori_h, :ori_w, ]
+# if flag_pad:
+#     im_sr = im_sr[:, :ori_h, :ori_w, ]
 
-for jj in range(im_lq_bs.shape[0]):
-    img_name = str(Path(im_path_bs[jj]).name)
-    basename = os.path.splitext(os.path.basename(img_name))[0]
-    outpath = str(Path(opt.outdir)) + '/' + basename + '.png'
-    Image.fromarray(im_sr[jj, ].astype(np.uint8)).save(outpath)
+# for jj in range(im_lq_bs.shape[0]):
+#     img_name = str(Path(im_path_bs[jj]).name)
+#     basename = os.path.splitext(os.path.basename(img_name))[0]
+#     outpath = str(Path(opt.outdir)) + '/' + basename + '.png'
+#     Image.fromarray(im_sr[jj, ].astype(np.uint8)).save(outpath)
 
 #%%
-import numpy as np
-import matplotlib.pyplot as plt
+import os
+from PIL import Image
+from torchvision import transforms
+import torch
 
-x = np.load('/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/satellite_data/hr_ndvi_patches_x4/test/lr/patch_1000.npy')
-print(x.shape)
-plt.imshow(x[0])
+data_path = 'sentinel_data_s1s2/train_original'
+
+for img_path in os.listdir(data_path):
+    img = Image.open(os.path.join(data_path, img_path))
+    transform = transforms.Compose([transforms.ToTensor()])
+    img = transform(img)
+    assert img.shape[0] == 3
+    assert img.shape[1] == 256
+    assert img.shape[1] == img.shape[2]
+# %%
+from utils import get_data_superres_2, get_data_superres
+from torchvision import transforms
+import matplotlib.pyplot as plt
+import torch
+
+train_path = 'sentinel_data_s1s2/train_original'
+valid_path = 'sentinel_data_s1s2/val_original'
+magnification_factor = 4
+
+image_size_2 = 64
+image_size = 256
+
+transform = transforms.Compose([
+transforms.Resize((image_size, image_size)),
+])
+train_dataset_2 = get_data_superres_2(train_path, magnification_factor, image_size_2)
+val_dataset_2 = get_data_superres_2(valid_path, magnification_factor, image_size_2)
+
+train_dataset = get_data_superres(train_path, magnification_factor, 0.5, True, 'PIL', transform)
+val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, True, 'PIL', transform)
+
+index = torch.randint(0, len(train_dataset), (1,))
+fig, axs = plt.subplots(1,3)
+axs[0].imshow(train_dataset_2[index][0].permute(1,2,0))
+axs[1].imshow(train_dataset[index][0].permute(1,2,0))
+axs[2].imshow(train_dataset[index][1].permute(1,2,0))
+plt.show()
 # %%

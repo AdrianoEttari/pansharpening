@@ -52,7 +52,7 @@ test_img_hr = test_dataset[110][1]
 #     ])
 
 #%% 
-from UNet_model_superres_new import Attention_UNet_superres,Residual_Attention_UNet_superres,Residual_Attention_UNet_superres_2,Residual_MultiHeadAttention_UNet_superres,Residual_Visual_MultiHeadAttention_UNet_superres
+from UNet_model_superres import Attention_UNet_superres,Residual_Attention_UNet_superres,Residual_Attention_UNet_superres_2,Residual_MultiHeadAttention_UNet_superres,Residual_Visual_MultiHeadAttention_UNet_superres
 
 def model_tester(model_name_list, UNet_type_list, snapshot_name_list, test_img_lr, device, test_img_hr=None, save_path=None):
     super_lr_imgs = []
