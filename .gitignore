@@ -166,6 +166,9 @@ Humans_test/
 CelebA/
 animal_imgs/
 other/
+sentinel_data_s1s2/
+sentinel_data_crops/
+aggregation_sampling/
 
 # Files
 *.jpg
@@ -176,3 +179,4 @@ other/
 *.pptx
 *.pt
 *.npy
+*.tif

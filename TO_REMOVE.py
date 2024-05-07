@@ -176,3 +176,12 @@ for jj in range(im_lq_bs.shape[0]):
     basename = os.path.splitext(os.path.basename(img_name))[0]
     outpath = str(Path(opt.outdir)) + '/' + basename + '.png'
     Image.fromarray(im_sr[jj, ].astype(np.uint8)).save(outpath)
+
+#%%
+import numpy as np
+import matplotlib.pyplot as plt
+
+x = np.load('/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/satellite_data/hr_ndvi_patches_x4/test/lr/patch_1000.npy')
+print(x.shape)
+plt.imshow(x[0])
+# %%
