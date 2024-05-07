@@ -221,3 +221,21 @@ axs[1].imshow(train_dataset[index][0].permute(1,2,0))
 axs[2].imshow(train_dataset[index][1].permute(1,2,0))
 plt.show()
 # %%
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
+image_size = 256
+
+transform = transforms.Compose([
+transforms.Resize((image_size, image_size)),
+transforms.ToTensor(),
+])
+
+train_path = 'sentinel_data_crops/EuroSAT'
+train_dataset = datasets.ImageFolder(train_path, transform=transform)
+
+train_loader = DataLoader(dataset=train_dataset, batch_size=8, shuffle=False)
+
+len(train_loader.dataset.classes)
+# %%
+
+# %%
