@@ -180,3 +180,4 @@ aggregation_sampling/
 *.pt
 *.npy
 *.tif
+TO_REMOVE.py

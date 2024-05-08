@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from torchvision.transforms import ToTensor, ToPILImage
+from scipy.ndimage import gaussian_filter
 
 
 def load_from_pickle(file_path):
@@ -95,33 +96,39 @@ def merge_images(image_dict):
 
     return merged_image
 
-import numpy as np
-from scipy.ndimage import gaussian_filter
 
-def aggregation_sampling(image1, image2, list_of_coordinate_lists, overlapping, sigma=1.0):
+def aggregation_sampling(image1, image2, list1, list2, overlapping, sigma=1.0):
     """
     Aggregate two images using weighted sampling based on Gaussian filter.
 
+    Parameters:
+    image1: (torch.Tensor) The first image to be aggregated (it has overlapping//2 pixels in common with the second image).
+    image2: (torch.Tensor) The second image to be aggregated (it has overlapping//2 pixels in common with the first image).
+    list1: (list) A list with four integers indicating respectively the starting y of the overlapping, the ending y of the overlapping,
+        the starting x of the overlapping and the ending x of the overlapping in the first image (THE COORDINATES ARE RELATIVE TO THE FIRST IMAGE).
+    list1: (list) A list with four integers indicating respectively the starting y of the overlapping, the ending y of the overlapping,
+        the starting x of the overlapping and the ending x of the overlapping in the first image (THE COORDINATES ARE RELATIVE TO THE SECOND IMAGE).
+    overlapping: (int) The number of overlapping pixels between the two images.
+    sigma: (float) The standard deviation of the Gaussian filter.
+
     ------------ TO ADJUST ------------ 
     """
-    import ipdb; ipdb.set_trace()
     # Initialize the aggregated image with zeros
-    aggregated_image = torch.zeros(image1.shape[0], image1.shape[1], (image1.shape[2] - overlapping)*2)
+    aggregated_image = torch.zeros(image1.shape[0], image1.shape[1], (image1.shape[2] - overlapping//2)*2)
 
-    y1_start, y1_end, x1_start, x1_end = list_of_coordinate_lists[0]
-    y2_start, y2_end, x2_start, x2_end = list_of_coordinate_lists[1]
-    # Extract overlapping regions from the images
+    y1_start, y1_end, x1_start, x1_end = list1
+    y2_start, y2_end, x2_start, x2_end = list2
+
+    # Extract overlapping regions from the images (REMEMBER THAT THEY ARE NOT THE SAME! JUST THE LOCATION IS THE SAME)
     overlap_image1 = image1[:, y1_start:y1_end, x1_start:x1_end]
     overlap_image2 = image2[:, y2_start:y2_end, x2_start:x2_end]
 
-    # Calculate the weights using a Gaussian filter
-    weights = torch.tensor(gaussian_filter(torch.ones_like(overlap_image1), sigma)).to(torch.float32)
-    # Weighted sum for the overlapping region
-    aggregated_image[:, 0:256, 0:aggregated_image.shape[2]//2-overlapping] =  image1[:, 0:256, 0:x1_end-overlapping]
-    aggregated_image[:, 0:256, aggregated_image.shape[2]//2+overlapping:] =  image2[:, 0:256, overlapping:]
+    aggregated_image[:, y1_start:y1_end, :x1_start] =  image1[:, y1_start:y1_end, :x1_start]
+    aggregated_image[:, y1_start:y1_end, x1_start+overlapping:] =  image2[:, y1_start:y2_end, overlapping:]
 
-    aggregated_image[:, y2_start:y2_end, x2_start:x2_end] += weights * overlap_image2
-
+    final_overlap = 0.5 * (overlap_image1 + overlap_image2)
+    aggregated_image[:, y1_start:y1_end, x1_start:x1_start+overlapping] = final_overlap
+    # CHECK IF YOU CAN USE GAUSSIAN FILTER, wavelet_reconstruction AND adaptive_instance_normalization
     return aggregated_image
 
 
