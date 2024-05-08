@@ -1,19 +1,84 @@
 import os
-import logging
+# import logging
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim
 import torch.utils.data
-import torchvision.transforms as transforms
 from torchvision import datasets
+import torchvision.transforms as transforms
+# from torchvision import datasets
 import imageio
-import numpy as np
+# import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
+# import copy
+import numpy as np
 
-from UNet_model import SimpleUNet
+try:
+    from UNet_model_generation import Residual_Attention_UNet_generation
+except:
+    from generate_new_imgs.UNet_model_generation import Residual_Attention_UNet_generation
 
+import torch
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
+import torch.nn.functional as F
+
+class VGGPerceptualLoss(nn.Module):
+    def __init__(self, device):
+        super(VGGPerceptualLoss, self).__init__()
+        self.vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features
+        # By using .features, we are considering just the convolutional part of the VGG network
+        # without considering the avg pooling and the fully connected layers which map the features to the 1000 classes
+        # and so, solve the classification task.
+        # self.vgg = nn.Sequential(*[self.vgg[i] for i in range(8)]) 
+        self.vgg.to(device)
+        self.vgg.eval()  # Set VGG to evaluation mode
+        self.device = device
+        # Freeze all VGG parameters
+        for param in self.vgg.parameters():
+            param.requires_grad = False
+        
+    def preprocess_image(self, image):
+        '''
+        The VGG network wants input sized (224,224), normalized and as pytorch tensor. 
+        '''
+        transform = transforms.Compose([
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        
+        if image.shape[-1] != 224:
+            try:
+                image = F.interpolate(image, size=(224, 224), mode='bicubic', align_corners=False)
+            except:
+                image = F.interpolate(image.to('cpu'),  size=(224, 224), mode='bicubic', align_corners=False).to(self.device)
+        
+        return transform(image)
+    
+    def forward(self, x, y):
+        x = self.preprocess_image(x)
+        y = self.preprocess_image(y)
+
+        x_features = self.vgg(x)
+        y_features = self.vgg(y)
+
+        return torch.mean((x_features-y_features)**2)
+
+class CombinedLoss(nn.Module):
+    def __init__(self, first_loss, second_loss, weight_first=0.5):
+        super(CombinedLoss, self).__init__()
+        self.first_loss = first_loss
+        self.second_loss = second_loss
+        self.weight_first = weight_first  
+
+    def forward(self, predicted, target):
+        first_loss_value = self.first_loss(predicted, target)
+        second_loss_value = self.second_loss(predicted, target)
+        combined_loss = self.weight_first * first_loss_value + (1-self.weight_first) * second_loss_value
+        return combined_loss
+    
 class Diffusion:
     def __init__(
             self,
@@ -25,7 +90,7 @@ class Diffusion:
             beta_end=0.02,
             device='cuda',
             image_size=224,
-            model_name='img_generation'):
+            model_name='generation'):
     
         self.noise_steps = noise_steps
         self.beta_start = beta_start
@@ -33,24 +98,22 @@ class Diffusion:
         self.image_size = image_size
         self.model_name = model_name
         self.device = device
-
         self.snapshot_path = snapshot_path
+        
         self.model = model.to(self.device)
-
+        # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch
+        self.epochs_run = 0
         # If a snapshot exists, we load it
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot()
-
-        # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch (MAYBE WE CAN REMOVE IT FROM HERE)
-        self.epochs_run = 0
 
         self.noise_schedule = noise_schedule
 
         if self.noise_schedule == 'linear':
             self.beta = self.prepare_noise_schedule().to(self.device) 
             self.alpha = 1. - self.beta
-            self.alpha_hat = torch.cumprod(self.alpha, dim=0) # Notice that beta is not just a number, it is a tensor of shape (noise_steps,).
+            self.alpha_hat = torch.cumprod(self.alpha, dim=0) # Notice that beta is not just a number. It is a tensor of shape (noise_steps,).
         # If we are in the step t then we index the tensor with t. To get alpha_hat we compute the cumulative product of the tensor.
 
         elif self.noise_schedule == 'cosine':
@@ -78,7 +141,7 @@ class Diffusion:
         beta.append(1 - self.alpha_hat[0])
         beta =  torch.tensor(beta[::-1], dtype=self.alpha_hat.dtype, device=self.alpha_hat.device)
         return beta
-    
+
     def prepare_noise_schedule(self):
         '''
         In this function we set the noise schedule to use. Basically, we need to know how much gaussian noise we want to add
@@ -102,7 +165,7 @@ class Diffusion:
 
     def noise_images(self, x, t):
         '''
-        ATTENTION: The error Ɛ is random, but how much of it we add to move forward depends on the Beta schedule.
+        ATTENTION: The error epsilon is random, but how much of it we add to move forward depends on the Beta schedule.
 
         Input:
             x: the image at time t=0
@@ -110,15 +173,16 @@ class Diffusion:
         
         Output:
             x_t: the image at the current timestep (x_t)
-            Ɛ: the error that we add to x_t to move forward
+            epsilon: the error that we add to x_t to move forward
         '''
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None] # Each None is a new dimension (e.g.
         # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)). It doens't add
         # them exatly in the same place, but it adds them in the place where the None is.
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
-        Ɛ = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
+        epsilon = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
-        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * Ɛ, Ɛ
+        # epsilon = 2 * (epsilon - epsilon.min()) / (epsilon.max() - epsilon.min()) - 1
+        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, epsilon
 
     def sample_timesteps(self, n):
         '''
@@ -135,7 +199,7 @@ class Diffusion:
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
     
-    def sample(self, n, target_class=None, cfg_scale=3, input_channels=3, plot_gif_bool=False):
+    def sample(self, n, model, target_class=None, cfg_scale=3, input_channels=3, plot_gif_bool=False):
         '''
         As the name suggests this function is used for sampling. Therefore we want to 
         loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY).
@@ -158,16 +222,16 @@ class Diffusion:
         Output:
             x: a tensor of shape (n, input_channels, self.image_size, self.image_size) with the generated images
         '''
-        model = self.model
 
         frames = []
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
-            x = torch.randn((n, input_channels, self.image_size, self.image_size)).to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
+            x = torch.randn((n, input_channels, self.image_size, self.image_size)).to(self.device)
+            # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
                 # Basically, each of the n image will be processed with the same integer time step t.
-
+                
                 predicted_noise = model(x, t, target_class)
                 if cfg_scale > 0:
                     uncond_predicted_noise = model(x, t, None)
@@ -184,14 +248,13 @@ class Diffusion:
                     noise = torch.zeros_like(x) # we don't add noise (it's equal to 0) in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
                 if plot_gif_bool == True:
-                    os.makedirs(f'{os.getcwd()}/gif_result', exist_ok=True)
-                    plt.imshow(x[0][0].cpu().numpy(), cmap='gray')
-                    plt.savefig(f'{os.getcwd()}/gif_result/frame_{i}.png')
+                    plt.imshow(x[0][0].cpu().numpy())
+                    plt.savefig(os.path.join('..', 'models_run', self.model_name, 'results', f'frame_{i}.png'))
                     plt.title(f't-step={i}', fontsize=30)
-                    frames.append(imageio.imread(f'{os.getcwd()}/gif_result/frame_{i}.png'))
-                    os.remove(f'{os.getcwd()}/gif_result/frame_{i}.png')
+                    frames.append(imageio.imread(os.path.join('..', 'models_run', self.model_name, 'results', f'frame_{i}.png')))
+                    os.remove(os.path.join('..', 'models_run', self.model_name, 'results', f'frame_{i}.png'))
         if plot_gif_bool == True:
-            imageio.mimsave(os.path.join(f'{os.getcwd()}/gif_result',f'gif_{self.model_name}_{target_class}.gif'), frames, duration=0.25) 
+            imageio.mimsave(os.path.join('..', 'models_run', self.model_name, 'results', 'gif_result.gif'), frames, duration=0.25) 
         model.train() # enables dropout and batch normalization
         # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
         # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 
@@ -200,20 +263,23 @@ class Diffusion:
         # x = (x * 255).type(torch.uint8)
         return x
 
-    def _save_snapshot(self, epoch):
+    def _save_snapshot(self, epoch, model):
         '''
         This function saves the model state, the optimizer state and the current epoch.
         It is a mandatory function in order to be fault tolerant.
 
         Input:
             epoch: the current epoch
+            model: the model to save
 
         Output:
             None
         '''
         snapshot = {
-            "MODEL_STATE": self.model.state_dict(),
+            "MODEL_STATE": model.state_dict(),
             "EPOCHS_RUN": epoch,
+            # "OPTIMIZER":self.optimizer.state_dict(),
+            # "LR_SCHEDULER":self.lr_scheduler.state_dict(),
         }
         torch.save(snapshot, self.snapshot_path)
         print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
@@ -224,50 +290,64 @@ class Diffusion:
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
+
         snapshot = torch.load(self.snapshot_path, map_location=self.device)
         self.model.load_state_dict(snapshot["MODEL_STATE"])
         self.epochs_run = snapshot["EPOCHS_RUN"]
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
-    def early_stopping(self, epoch, patience, epochs_without_improving):
+    def early_stopping(self, patience, epochs_without_improving):
         '''
-        This function checks if the validation loss is increasing. If it is for more than patience times, then it returns True (that will correspond to breaking the training loop)
-        and saves the weights of the model.
+        This function checks if the validation loss is increasing. If it is for more than patience times,
+        then it returns True (that will correspond to breaking the training loop).
         '''
         if epochs_without_improving >= patience:
             print('Early stopping! Training stopped')
-            self._save_snapshot(epoch)
             return True
 
-    def train(self, lr, epochs, save_every, train_loader, val_loader, patience, verbose):
+    def train(self, lr, epochs, check_preds_epoch, train_loader, val_loader, patience, loss, verbose):
         '''
         This function performs the training of the model, saves the snapshots and the model at the end of the training each self.every_n_epochs epochs.
 
         Input:
             lr: the learning rate
             epochs: the number of epochs
-            save_every: the frequency at which the model weights will be saved
+            check_preds_epoch: the frequency at which the model will save the predictions
             train_loader: the training loader
             val_loader: the validation loader
             patience: the number of epochs after which the training will be stopped if the validation loss is increasing
+            loss: the loss function to use
             verbose: if True, the function will use the tqdm during the training and the validation
         '''
+        num_classes = len(train_loader.dataset.classes)
         model = self.model
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        # optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
         # Basically, weight decay is a regularization technique that penalizes large weights. It's a way to prevent overfitting. In AdamW, 
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
-        mse = nn.MSELoss()
+        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
+        if loss == 'MSE':
+            loss_function = nn.MSELoss()
+        elif loss == 'MAE':
+            loss_function = nn.L1Loss()
+        elif loss == 'Huber':
+            loss_function = nn.HuberLoss() 
+        elif loss == 'MSE+Perceptual_noise':
+            vgg_loss = VGGPerceptualLoss(self.device)
+            mse_loss = nn.MSELoss()
+            loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.3)
+        
         epochs_without_improving = 0
         best_loss = float('inf')  
 
-        for epoch in range(epochs):
+        for epoch in range(self.epochs_run, epochs):
+            train_loader.sampler.set_epoch(epoch)
             if verbose:
-                pbar_train = tqdm(train_loader,desc='Training')
+                pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
-                    pbar_val = tqdm(val_loader,desc='Validation')
+                    pbar_val = tqdm(val_loader,desc='Validation', position=0)
             else:
                 pbar_train = train_loader
                 if val_loader is not None:
@@ -275,83 +355,93 @@ class Diffusion:
 
             running_train_loss = 0.0
             running_val_loss = 0.0
-
+            
             model.train()
             for i, (img,label) in enumerate(pbar_train):
+                
                 label = label.to(self.device)
                 img = img.to(self.device)
 
                 t = self.sample_timesteps(img.shape[0]).to(self.device)
                 # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size) with random integers from 1 to noise_steps.
-                x_t, noise = self.noise_images(img, t) # here I'm going to get batch_size noise images
+                x_t, noise = self.noise_images(img, t) # get batch_size noise images
 
                 optimizer.zero_grad() # set the gradients to 0
+
                 if np.random.random() < 0.1: # 10% of the time, don't pass labels (we train 10% of the times uncoditionally and 90% conditionally)
                     label = None
                 predicted_noise = model(x_t, t, label) # here we pass the plain labels to the model (e.g. 0,1,2,...,9 if there are 10 classes)
-
-                train_loss = mse(predicted_noise, noise)
+                
+                train_loss = loss_function(predicted_noise, noise)
+                
                 train_loss.backward() # compute the gradients
                 optimizer.step() # update the weights
-
-                pbar_train.set_postfix(MSE_LOSS=train_loss.item()) # set_postfix just adds a message or value displayed after the progress bar. In this case the loss of Batch i.
+                
+                if verbose:
+                    pbar_train.set_postfix(LOSS=train_loss.item()) # set_postfix just adds a message or value displayed after the progress bar. In this case the loss of the current batch.
             
                 running_train_loss += train_loss.item()
             
-            scheduler.step()
+            # scheduler.step()
 
             running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
-            print(f"Epoch {epoch}: Running Train loss (MSE) {running_train_loss}")
-            # logger.info(f"Epoch {epoch}: Running Train loss {running_train_loss}")
-            # train_writer.add_scalar('Loss/train (MSE)', running_train_loss, epoch)
+            print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
-            if epoch % save_every == 0:
-                self._save_snapshot(epoch)
-                fig, axs = plt.subplots(10,5, figsize=(15,10))
-                for i in range(10):
-                    prediction = self.sample(5, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False) 
+            # num_classes = None
+            if epoch % check_preds_epoch == 0:
+                if val_loader is None:
+                    self._save_snapshot(epoch, model)
+
+                fig, axs = plt.subplots(num_classes,5, figsize=(15,15))
+
+                for i in range(num_classes):
+                    prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
                     for j in range(5):
-                        axs[i,j].imshow(prediction[j][0].cpu().numpy(), cmap='gray')
-                        axs[i,j].axis('off')
-                fig.savefig(os.path.join(os.curdir, 'models_run', self.model_name, 'results', f'predictions_{epoch}_epoch.png'))
+                        axs[i,j].imshow(prediction[j][0].cpu().numpy())
+                        axs[i,j].set_title(f'Class {i}')
+
+                plt.savefig(os.path.join('..', 'models_run', self.model_name, 'results', f'generation_{epoch}_epoch.png'))
 
             if val_loader is not None:
                 with torch.no_grad():
                     model.eval()
-                    for i, (img,label) in enumerate(pbar_val):
+                    
+                    for (img,label) in pbar_val:
                         label = label.to(self.device)
                         img = img.to(self.device)
 
                         t = self.sample_timesteps(img.shape[0]).to(self.device)
                         # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size)with random integers from 1 to noise_steps.
-                        x_t, noise = self.noise_images(img, t) # here I'm going to get batch_size noise images
+                        x_t, noise = self.noise_images(img, t) # get batch_size noise images
                         
                         if np.random.random() < 0.1: # 10% of the time, don't pass labels (we train 10% of the times uncoditionally and 90% conditionally)
                             label = None
                         predicted_noise = model(x_t, t, label) # here we pass the plain labels to the model (i.e. 0,1,2,...,9 if there are 10 classes)
-                        # predicted_noise = model(x_t, t, None)
 
-                        val_loss = mse(predicted_noise, noise)
+                        val_loss = loss_function(predicted_noise, noise)
 
-                        pbar_val.set_postfix(MSE_LOSS=val_loss.item()) # set_postfix just adds a message or value
-                        # displayed after the progress bar. In this case the loss of Batch i.
+                        if verbose:
+                            pbar_val.set_postfix(LOSS=val_loss.item()) # set_postfix just adds a message or value
+                        # displayed after the progress bar. In this case the loss of the current batch.
 
                         running_val_loss += val_loss.item()
 
                     running_val_loss /= len(val_loader.dataset)
-                    print(f"Epoch {epoch}: Running Val loss (MSE){running_val_loss}")
+                    print(f"Epoch {epoch}: Running Val loss ({loss}){running_val_loss}")
 
 
             if val_loader is not None:
                 if running_val_loss < best_loss - 0:
                     best_loss = running_val_loss
                     epochs_without_improving = 0
+                    if self.device==0:
+                        self._save_snapshot(epoch, model)
                 else:
                     epochs_without_improving += 1
 
-                if self.early_stopping(epoch, patience, epochs_without_improving):
+                if self.early_stopping(patience, epochs_without_improving):
                     break
-                
+            print('Epochs without improving: ', epochs_without_improving)
 
 def launch(args):
     '''
@@ -364,18 +454,18 @@ def launch(args):
         lr: the learning rate
         epochs: the number of epochs
         noise_schedule: the noise schedule (linear, cosine)
-        save_every: Specifies the frequency, in terms of epochs, at which the model weights will be saved
+        check_preds_epoch: specifies the frequency, in terms of epochs, at which the model will perform predictions and save them. Moreover,
+            if val_loader=None then the weights of the model will be saved at this frequency.
         snapshot_name: the name of the snapshot file
         snapshot_folder_path: the folder path where the snapshots will be saved
         model_name: the name of the model
         noise_steps: the number of noise steps
-        device: the device to use (cuda, cpu, mps)
         patience: the number of epochs after which the training will be stopped if the validation loss is increasing
-        num_classes: the number of classes
         input_channels: the number of input channels
         output_channels: the number of output channels
         plot_gif_bool: if True, the function will plot a gif with the generated images for each class
-        verbose: if True, the function will use the tqdm during the training and the validation
+        loss: the loss function to use
+        UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
 
     Output:
         None
@@ -386,49 +476,60 @@ def launch(args):
     lr = args.lr
     epochs = args.epochs
     noise_schedule = args.noise_schedule
-    save_every = args.save_every
+    check_preds_epoch = args.check_preds_epoch
     snapshot_name = args.snapshot_name
     snapshot_folder_path = args.snapshot_folder_path
     model_name = args.model_name
     noise_steps = args.noise_steps
     device = args.device
     patience = args.patience
-    num_classes = args.num_classes
     input_channels, output_channels = args.inp_out_channels, args.inp_out_channels
     plot_gif_bool = args.plot_gif_bool
+    loss = args.loss
+    UNet_type = args.UNet_type
 
     os.makedirs(snapshot_folder_path, exist_ok=True)
-    os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
+    os.makedirs(os.path.join('..', 'models_run', model_name, 'results'), exist_ok=True)
 
-    # transform = transforms.Compose([
-    # transforms.Resize((image_size, image_size)),
-    # transforms.ToTensor(),
-    # ])
+    transform = transforms.Compose([
+    transforms.Resize((image_size, image_size)),
+    transforms.ToTensor(),
+        ]) 
 
-    # train_path = f'{dataset_path}/train'
-    # valid_path = f'{dataset_path}/val'
+    train_path = f'../{dataset_path}'
 
-    # train_dataset = datasets.ImageFolder(root=train_path, transform=transform)
-    # valid_dataset = datasets.ImageFolder(root=valid_path, transform=transform)
-    # train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    # val_loader = DataLoader(dataset=valid_dataset, batch_size=batch_size, shuffle=True)
+    train_dataset = datasets.ImageFolder(train_path, transform=transform)
+        
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 
+    num_classes = len(train_loader.dataset.classes)
+    gpu_id = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(int(gpu_id))
+    device = gpu_id
 
-    def get_dataloaders_MNIST(batch_size):
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-
-        train_dataset = datasets.MNIST(root='./MNIST_data', train=True, download=True, transform=transform)
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-
-        val_dataset = datasets.MNIST(root='./MNIST_data', train=False, download=True, transform=transform)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-
-        return train_loader, val_loader
+    if UNet_type.lower() == 'attention unet':
+        print('Using Attention UNet')
+        # model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
+        pass
+    elif UNet_type.lower() == 'residual attention unet':
+        print('Using Residual Attention UNet')
+        model = Residual_Attention_UNet_generation(input_channels, output_channels, num_classes, device).to(device)
+    elif UNet_type.lower() == 'residual attention unet 2':
+        print('Using Residual Attention UNet 2')
+        # model = Residual_Attention_UNet_superres_2(input_channels, output_channels, device).to(device)
+        pass
+    elif UNet_type.lower() == 'residual multihead attention unet':
+        print('Using Residual MultiHead Attention UNet')
+        # model = Residual_MultiHeadAttention_UNet_superres(input_channels, output_channels, device).to(device)
+        pass
+    elif UNet_type.lower() == 'residual visual multihead attention unet':
+        print('Using Residual Visual MultiHead Attention UNet')
+        # model = Residual_Visual_MultiHeadAttention_UNet_superres(input_channels, image_size ,output_channels, device).to(device)
+        pass
+    else:
+        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet or Residual Attention UNet 2 or Residual MultiHead Attention UNet or Residual Visual MultiHeadAttention UNet superres')
+    print("Num params: ", sum(p.numel() for p in model.parameters()))
     
-    train_loader, val_loader = get_dataloaders_MNIST(batch_size)
-    width = next(iter(train_loader))[0].size()[-1]
-
-    model = SimpleUNet(width, num_classes, input_channels, output_channels, device).to(device)
     print("Num params: ", sum(p.numel() for p in model.parameters()))
 
     snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
@@ -437,24 +538,22 @@ def launch(args):
         noise_schedule=noise_schedule, model=model,
         snapshot_path=snapshot_path,
         noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02,
-        device=device,image_size=image_size, model_name=model_name)
+        device=device, image_size=image_size, model_name=model_name)
 
     # Training 
     diffusion.train(
-        lr=lr, epochs=epochs, save_every=save_every,
-        train_loader=train_loader, val_loader=val_loader,
-        patience=patience,
-        verbose=True)
+        lr=lr, epochs=epochs, check_preds_epoch=check_preds_epoch,
+        train_loader=train_loader, val_loader=None, patience=patience, loss=loss, verbose=True)
 
-    # Sampling
-    fig, axs = plt.subplots(10,5, figsize=(15,10))
-    for i in range(10):
-        prediction = diffusion.sample(5, target_class=torch.tensor([i], dtype=torch.int64).to(device), input_channels=input_channels, plot_gif_bool=plot_gif_bool) 
+    fig, axs = plt.subplots(num_classes,5, figsize=(15,15))
+    for i in range(num_classes):
+        prediction = diffusion.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
         for j in range(5):
-            axs[i,j].imshow(prediction[j][0].cpu().numpy(), cmap='gray')
-            axs[i,j].axis('off')
-    fig.savefig(os.path.join(os.curdir, 'models_run', model_name, 'results', f'predictions_final.png'))
-    plt.show()
+            axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
+            axs[i,j].set_title(f'Class {i}')
+
+    plt.savefig(os.path.join('..', 'models_run', model_name, 'results', f'generation_results.png'))
+
 
 if __name__ == '__main__':
     import argparse     
@@ -463,18 +562,17 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--image_size', type=int)
     parser.add_argument('--lr', type=float, default=3e-4)
-    parser.add_argument('--save_every', type=int, default=20)
+    parser.add_argument('--check_preds_epoch', type=int, default=20)
     parser.add_argument('--noise_schedule', type=str, default='cosine')
     parser.add_argument('--snapshot_name', type=str, default='snapshot.pt')
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--noise_steps', type=int, default=200)
-    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--dataset_path', type=str, default=None)
-    parser.add_argument('--num_classes', type=int)
     parser.add_argument('--inp_out_channels', type=int, default=3) # input channels must be the same of the output channels
     parser.add_argument('--plot_gif_bool', type=bool, default=False)
-    
+    parser.add_argument('--loss', type=str)
+    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet' or 'Residual Attention UNet 2'
     args = parser.parse_args()
-    args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
+    args.snapshot_folder_path = os.path.join('..', 'models_run', args.model_name, 'weights')
     launch(args)

@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader, Dataset
 # import copy
 import numpy as np
 
+
 from UNet_model_generation import Residual_Attention_UNet_generation
 
 import torch
@@ -504,14 +505,11 @@ def launch(args):
     transforms.ToTensor(),
         ]) 
 
-    train_path = f'{dataset_path}/train_original'
-    valid_path = f'{dataset_path}/val_original'
+    train_path = f'../{dataset_path}'
 
     train_dataset = datasets.ImageFolder(train_path, transform=transform)
-    val_dataset = datasets.ImageFolder(root=valid_path, transform=transform)
         
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
-    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,shuffle=False, sampler=DistributedSampler(val_dataset))
 
     num_classes = len(train_loader.dataset.classes)
     gpu_id = int(os.environ["LOCAL_RANK"])
@@ -556,7 +554,7 @@ def launch(args):
     # Training 
     diffusion.train(
         lr=lr, epochs=epochs, check_preds_epoch=check_preds_epoch,
-        train_loader=train_loader, val_loader=val_loader, patience=patience, loss=loss, verbose=True)
+        train_loader=train_loader, val_loader=None, patience=patience, loss=loss, verbose=True)
     
     destroy_process_group()
 
@@ -565,7 +563,7 @@ def launch(args):
     for i in range(num_classes):
         prediction = diffusion.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
         for j in range(5):
-            axs[i,j].imshow(prediction[j][0].cpu().numpy())
+            axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
             axs[i,j].set_title(f'Class {i}')
 
     plt.savefig(os.path.join('..', 'models_run', model_name, 'results', f'generation_results.png'))
