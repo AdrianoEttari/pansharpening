@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import torch
 from numpy import pi, exp, sqrt
 
-class split_aggregate_sampling:
+class split_aggregation_sampling:
     def __init__(self, img_lr, patch_size, stride, magnification_factor, diffusion_model, device):
         assert stride <= patch_size
         self.img_lr = img_lr
@@ -140,8 +140,8 @@ if __name__ == '__main__':
         magnification_factor=magnification_factor,device=device,
         image_size=model_input_size, model_name=model_name, Degradation_type=Degradation_type)
     
-    aggregate_sampling = split_aggregate_sampling(img_lr, pch_size, stride, magnification_factor, diffusion, device)
-    final_pred = aggregate_sampling.aggregation_sampling()
+    aggregation_sampling = split_aggregation_sampling(img_lr, pch_size, stride, magnification_factor, diffusion, device)
+    final_pred = aggregation_sampling.aggregation_sampling()
 
     final_pred = transforms.ToPILImage()(final_pred.squeeze(0).cpu())
-    final_pred.save('anime_test_sr_aggregate_sampling.png')
+    final_pred.save('anime_test_sr_aggregation_sampling.png')
