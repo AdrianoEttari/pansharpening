@@ -181,3 +181,4 @@ aggregation_sampling/
 *.npy
 *.tif
 TO_REMOVE.py
+*.parquet
