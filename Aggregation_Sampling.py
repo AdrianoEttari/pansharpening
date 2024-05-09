@@ -103,36 +103,57 @@ class split_aggregation_sampling:
             weights = torch.tensor(np.outer(y_probs, x_probs)).to(torch.float32).to(self.device)
             return torch.tile(weights, (nbatches, 3, 1, 1))
 
-
-if __name__ == '__main__':
-
+def launch(args):
     from PIL import Image
     from torchvision import transforms
     from torch.nn import functional as F
     import matplotlib.pyplot as plt
     from train_diffusion_superres import Diffusion
     from UNet_model_superres import Residual_Attention_UNet_superres
-    import os
+    import os  
 
-    magnification_factor = 8
-    input_channels = output_channels = 3
-    noise_schedule = 'cosine'
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
-    snapshot_path = os.path.join('models_run','DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_DownBlur_512','weights','snapshot.pt')
-    noise_steps = 1500
-    model_input_size = 512
-    model_name = 'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_DownBlur_512'
-    Degradation_type = 'DownBlur'
+    snapshot_folder_path = args.snapshot_folder_path
+    snapshot_name = args.snapshot_name
+    magnification_factor = args.magnification_factor
+    input_channels = output_channels = args.inp_out_channels
+    noise_schedule = args.noise_schedule
+    device = args.device
+    model_input_size = args.model_input_size
+    noise_steps = args.noise_steps
+    model_name = args.model_name
+    Degradation_type = args.Degradation_type
+    patch_size = args.patch_size
+    stride = args.stride
+    destination_path = args.destination_path
+    img_lr_path = args.img_lr_path
+    Unet_type = args.UNet_type
 
-    img_hr = Image.open('anime_test.jpg')
-    img_lr = img_hr.resize((128, 128), Image.BICUBIC)
-    transform = transforms.Compose([ transforms.ToTensor()])
+    snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
+
+    if Unet_type.lower() == 'residual attention unet':
+        model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+
+    print(f'You are using {Unet_type} model')
+
+    img_lr = Image.open(img_lr_path)
+    try:
+        assert img_lr.size[0] == img_lr.size[1] # Image must be square
+    except:
+        distances = []
+        possible_sizes = [64,128,256,512,1024]
+        for size in possible_sizes:
+            distance = 0
+            distance += abs(size - img_lr.size[0])
+            distance += abs(size - img_lr.size[1])
+            distances.append(distance)
+        new_width = new_height = possible_sizes[np.argmin(distances)]
+
+        print(f'Image must be square but it is {img_lr.size[0],img_lr.size[1]}! It will be resized to {new_width}x{new_height}')
+        img_lr = img_lr.resize((new_width, new_height))
+
+    transform = transforms.Compose([transforms.ToTensor()])
     img_lr = transform(img_lr).unsqueeze(0).to(device)
         
-    pch_size = 64
-    stride = 32
-
     diffusion = Diffusion(
         noise_schedule=noise_schedule, model=model,
         snapshot_path=snapshot_path,
@@ -140,8 +161,32 @@ if __name__ == '__main__':
         magnification_factor=magnification_factor,device=device,
         image_size=model_input_size, model_name=model_name, Degradation_type=Degradation_type)
     
-    aggregation_sampling = split_aggregation_sampling(img_lr, pch_size, stride, magnification_factor, diffusion, device)
+    aggregation_sampling = split_aggregation_sampling(img_lr, patch_size, stride, magnification_factor, diffusion, device)
     final_pred = aggregation_sampling.aggregation_sampling()
 
     final_pred = transforms.ToPILImage()(final_pred.squeeze(0).cpu())
-    final_pred.save('anime_test_sr_aggregation_sampling.png')
+    final_pred.save(destination_path)
+
+if __name__ == '__main__':
+    import argparse
+    import os  
+    parser = argparse.ArgumentParser(description=' ')
+    parser.add_argument('--noise_schedule', type=str, default='cosine')
+    parser.add_argument('--snapshot_name', type=str, default='snapshot.pt')
+    parser.add_argument('--noise_steps', type=int, default=1000)
+    parser.add_argument('--model_input_size', type=int, default=512)
+    parser.add_argument('--model_name', type=str)
+    parser.add_argument('--UNet_type', type=str)
+    parser.add_argument('--Degradation_type', type=str)
+    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--magnification_factor', type=int)
+    parser.add_argument('--inp_out_channels', type=int, default=3)
+    parser.add_argument('--patch_size', type=int, default=64)
+    parser.add_argument('--stride', type=int, default=32)
+    parser.add_argument('--destination_path', type=str)
+    parser.add_argument('--img_lr_path', type=str)
+    args = parser.parse_args()
+    args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
+    launch(args)
+
+
