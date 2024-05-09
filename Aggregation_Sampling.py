@@ -86,7 +86,8 @@ class split_aggregation_sampling:
         
         assert torch.all(pixel_count != 0)
         im_res /= pixel_count
-
+        im_res = torch.clamp(im_res, 0, 1)
+        
         return im_res
 
     def gaussian_weights(self, tile_width, tile_height, nbatches):

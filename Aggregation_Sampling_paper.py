@@ -115,7 +115,6 @@ class ImageSpliterTh:
         else:
             h_start, h_end, w_start, w_end = index_infos
 
-        import ipdb; ipdb.set_trace()
         self.im_res[:, :, h_start:h_end, w_start:w_end] += pch_res * self.weight
         self.pixel_count[:, :, h_start:h_end, w_start:w_end] += self.weight
 
