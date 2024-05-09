@@ -149,7 +149,7 @@ def launch(args):
         new_width = new_height = possible_sizes[np.argmin(distances)]
 
         print(f'The image must be square but it is {img_lr.size[0],img_lr.size[1]}! It will be resized to {new_width}x{new_height}')
-        img_lr = img_lr.resize((new_width, new_height))
+        img_lr = img_lr.resize((new_width, new_height), Image.BICUBIC)
 
     transform = transforms.Compose([transforms.ToTensor()])
     img_lr = transform(img_lr).unsqueeze(0).to(device)
