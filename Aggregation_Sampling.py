@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from numpy import pi, exp, sqrt
+from tqdm import tqdm 
 
 class split_aggregation_sampling:
     def __init__(self, img_lr, patch_size, stride, magnification_factor, diffusion_model, device):
@@ -79,7 +80,7 @@ class split_aggregation_sampling:
         im_res = torch.zeros([batch_size, channels, height*magnification_factor, width*magnification_factor], dtype=img_lr.dtype, device=self.device)
         pixel_count = torch.zeros([batch_size, channels, height*magnification_factor, width*magnification_factor], dtype=img_lr.dtype, device=self.device)
 
-        for i in range(len(self.patches_lr)):
+        for i in tqdm(range(len(self.patches_lr))):
             patch_sr = self.diffusion_model.sample(1, self.model, self.patches_lr[i].squeeze(0).to(self.device), input_channels=3, plot_gif_bool=False)
             im_res[:, :, self.patches_sr_infos[i][0]:self.patches_sr_infos[i][1], self.patches_sr_infos[i][2]:self.patches_sr_infos[i][3]] += patch_sr * self.weight
             pixel_count[:, :, self.patches_sr_infos[i][0]:self.patches_sr_infos[i][1], self.patches_sr_infos[i][2]:self.patches_sr_infos[i][3]] += self.weight
