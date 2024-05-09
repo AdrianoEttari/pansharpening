@@ -115,6 +115,7 @@ class ImageSpliterTh:
         else:
             h_start, h_end, w_start, w_end = index_infos
 
+        import ipdb; ipdb.set_trace()
         self.im_res[:, :, h_start:h_end, w_start:w_end] += pch_res * self.weight
         self.pixel_count[:, :, h_start:h_end, w_start:w_end] += self.weight
 
@@ -320,9 +321,10 @@ if __name__ == '__main__':
     img_test = img_test.unsqueeze(0).to(device)
     pch_size = 64
     stride = 59
-    aggregation_sampling = ImageSpliterTh(img_test, pch_size, stride, sf=1)
+    magnification_factor = 4
+    aggregation_sampling = ImageSpliterTh(img_test, pch_size, stride, sf=magnification_factor)
 
-    im_spliter = ImageSpliterTh(img_test, pch_size, stride, sf=1)
+    im_spliter = ImageSpliterTh(img_test, pch_size, stride, sf=magnification_factor)
     for im_lq_pch, index_infos in tqdm(im_spliter):
         prova_im_sr_pch = torch.randn(1,3,256,256).to(device)
         # im_sr_pch = diffusion.sample(1, model, im_lq_pch[0].to(device), input_channels=3, plot_gif_bool=False)

@@ -404,7 +404,7 @@ class Diffusion:
                 for i in range(num_classes):
                     prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
                     for j in range(5):
-                        axs[i,j].imshow(prediction[j][0].cpu().numpy())
+                        axs[i,j].imshow(prediction[j].cpu().numpy())
                         axs[i,j].set_title(f'Class {i}')
 
                 plt.savefig(os.path.join('..', 'models_run', self.model_name, 'results', f'generation_{epoch}_epoch.png'))
