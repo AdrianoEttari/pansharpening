@@ -148,7 +148,7 @@ def launch(args):
             distances.append(distance)
         new_width = new_height = possible_sizes[np.argmin(distances)]
 
-        print(f'Image must be square but it is {img_lr.size[0],img_lr.size[1]}! It will be resized to {new_width}x{new_height}')
+        print(f'The image must be squared but it is {img_lr.size[0],img_lr.size[1]}! It will be resized to {new_width}x{new_height}')
         img_lr = img_lr.resize((new_width, new_height))
 
     transform = transforms.Compose([transforms.ToTensor()])
