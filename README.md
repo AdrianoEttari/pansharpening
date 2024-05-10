@@ -10,7 +10,7 @@ In the **models_run** folder there are the different models with their weights a
 ### Examples
 The following is an example of super resolution of our model with magnification_factor = 4
 
-[<img src="" height="224px"/>](https://imgsli.com/MjYyODA2)
+[<img src="assets/imgsli_1.jpg" height="224px"/>](https://imgsli.com/MjYyODA2)
 
 
 ### TODO
