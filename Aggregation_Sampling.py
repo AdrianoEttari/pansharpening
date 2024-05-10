@@ -6,6 +6,10 @@ from tqdm import tqdm
 
 class split_aggregation_sampling:
     def __init__(self, img_lr, patch_size, stride, magnification_factor, diffusion_model, device):
+        '''
+        This class is used to perform a split into patches an image (with the patchifier function)
+        and also to aggregate the super resolution of the generated patches (with the aggregation_sampling function).
+        '''
         assert stride <= patch_size
         self.img_lr = img_lr
         self.patch_size = patch_size
