@@ -17,10 +17,10 @@ class split_aggregation_sampling:
         self.model = diffusion_model.model
         batch_size, channels, height, width = img_lr.shape
 
-        self.patches_lr, self.patches_sr_infos = self.imgs_splitter(img_lr, patch_size, stride, magnification_factor)
+        self.patches_lr, self.patches_sr_infos = self.patchifier(img_lr, patch_size, stride, magnification_factor)
         self.weight = self.gaussian_weights(patch_size*magnification_factor, patch_size*magnification_factor, batch_size)
 
-    def imgs_splitter(self, img_to_split, patch_size, stride=None, magnification_factor=1):
+    def patchifier(self, img_to_split, patch_size, stride=None, magnification_factor=1):
         '''
         This function takes an image tensor and splits it into patches of size model_input_size x model_input_size.
         The stride is the number of pixels to skip between patches. If stride is not specified, it is set to model_input_size

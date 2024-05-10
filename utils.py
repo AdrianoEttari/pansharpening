@@ -346,7 +346,7 @@ def img_splitter(source_folder, destination_folder, desired_width, threshold_rat
                     counter += 1
 
 if __name__=="__main__":
-    main_folder = 'sentinel_data_s1s2'
+    main_folder = 'sentinel_data_s2'
     data_organizer = data_organizer(main_folder)
     data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
     for root, dirs, files in os.walk(main_folder):
