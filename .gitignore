@@ -169,11 +169,14 @@ other/
 sentinel_data_s1s2/
 sentinel_data_crops/
 aggregation_sampling/
+anime_data_10k/
+anime_data_50k/
+celebA_50k/
+sentinel_data_s2/
+sentinel_data_crops/
+models_run/
 
 # Files
-*.jpg
-*.jpeg
-*.png
 *.pdf
 .DS_Store
 *.pptx
