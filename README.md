@@ -8,9 +8,10 @@ Regarding the generative part, there are the training functions and the UNet mod
 In the **models_run** folder there are the different models with their weights and some results relative to the dataset they are trained on. 
 
 ### Examples
-The following is an example of super resolution of our model with magnification_factor = 4
+The following are examples of super resolution of our model.
 
-[<img src="assets/imgsli_1.jpg" height="224px"/>](https://imgsli.com/MjYyODA2)
+[<img src="assets/imgsli_1.jpg" height="224px"/>](https://imgsli.com/MjYyODA2) [<img src="assets/imgsli_2.jpg" height="512px"/>]() 
+
 
 
 ### TODO

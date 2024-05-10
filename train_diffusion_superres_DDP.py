@@ -1,20 +1,17 @@
 import os
-# import logging
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
-# from torchvision import datasets
 import imageio
-# import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
 from utils import get_data_superres, get_data_superres_BSRGAN, get_data_superres_2
-# import copy
+import copy
 
-from UNet_model_superres import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres, Residual_Attention_UNet_superres_2
+from UNet_model_superres import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres, Residual_Attention_UNet_superres_2, EMA
 
 import torch
 import torch.nn as nn
@@ -352,6 +349,9 @@ class Diffusion:
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
         # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
+        ema = EMA(model, decay=0.995)############################# EMA ############################
+        ema_model = copy.deepcopy(model).eval().requires_grad_(False)############################# EMA ############################
+
         if loss == 'MSE':
             loss_function = nn.MSELoss()
         elif loss == 'MAE':
@@ -405,6 +405,7 @@ class Diffusion:
                 
                 train_loss.backward() # compute the gradients
                 optimizer.step() # update the weights
+                ema.step_ema(ema_model, model)############################# EMA ############################
                 
                 if verbose:
                     pbar_train.set_postfix(LOSS=train_loss.item()) # set_postfix just adds a message or value displayed after the progress bar. In this case the loss of the current batch.
@@ -418,7 +419,8 @@ class Diffusion:
 
             if self.device==0 and epoch % check_preds_epoch == 0:
                 if val_loader is None:
-                    self._save_snapshot(epoch, model)
+                    # self._save_snapshot(epoch, model)
+                    self._save_snapshot(epoch, ema_model)############################# EMA ############################
 
                 fig, axs = plt.subplots(5,4, figsize=(15,15))
                 for i in range(5):
@@ -426,7 +428,8 @@ class Diffusion:
                     hr_img = val_loader.dataset[i][1]
 
                     superres_img = self.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
-                    residual_img = hr_img.to(self.device) - superres_img[0].to(self.device)
+                    superres_img_ema = self.sample(n=1,model=ema_model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)############################# EMA ############################
+                    # residual_img = hr_img.to(self.device) - superres_img[0].to(self.device)
 
                     axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
                     axs[i,0].set_title('Low resolution image')
@@ -434,8 +437,10 @@ class Diffusion:
                     axs[i,1].set_title('High resolution image')
                     axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
                     axs[i,2].set_title('Super resolution image')
-                    axs[i,3].hist(residual_img.permute(1,2,0).cpu().numpy().ravel())
-                    axs[i,3].set_title('Residual image')
+                    axs[i,3].imshow(superres_img_ema[0].permute(1,2,0).cpu().numpy()) ############################# EMA ############################
+                    axs[i,3].set_title('Super resolution image (EMA model)') ############################# EMA ############################
+                    # axs[i,3].hist(residual_img.permute(1,2,0).cpu().numpy().ravel())
+                    # axs[i,3].set_title('Residual image')
 
                 plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
 
@@ -451,7 +456,8 @@ class Diffusion:
                         # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size)with random integers from 1 to noise_steps.
                         x_t, noise = self.noise_images(hr_img, t) # get batch_size noise images
                         
-                        predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
+                        # predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
+                        predicted_noise = ema_model(x_t, t, lr_img, self.magnification_factor)############################# EMA ############################
 
                         if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
                             val_loss = loss_function(predicted_noise, noise)
@@ -473,7 +479,8 @@ class Diffusion:
                     best_loss = running_val_loss
                     epochs_without_improving = 0
                     if self.device==0:
-                        self._save_snapshot(epoch, model)
+                        # self._save_snapshot(epoch, model)
+                        self._save_snapshot(epoch, ema_model)############################# EMA ############################
                 else:
                     epochs_without_improving += 1
 
