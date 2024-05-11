@@ -21,5 +21,5 @@ conda activate pansharpening
 # model_name='UNet_MNIST_generation'
 # python train_diffusion.py --epochs=1 --batch_size=64 --image_size=28 --lr=3e-4 --noise_schedule='cosine' --snapshot_name=snapshot.pt --model_name="$model_name" --noise_steps=20 --device='mps' --inp_out_channels=1 --num_classes=10
 
-model_name='DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_DownBlur_512'
-python Aggregation_Sampling.py --noise_schedule='cosine' --snapshot_name=snapshot.pt --noise_steps=1500 --model_input_size=512 --model_name="$model_name" --Degradation_type='DownBlur' --device='mps' --magnification_factor=8 --inp_out_channels=3 --patch_size=64 --stride=32 --destination_path='./anime_test_sr_aggregation_sampling.png' --img_lr_path='./anime_test.jpg' --UNet_type='Residual Attention UNet' 
+model_name='DDP_Residual_Attention_UNet_superres_magnification4_celebA_DownBlur'
+python Aggregation_Sampling.py --noise_schedule='cosine' --snapshot_name=snapshot.pt --noise_steps=1500 --model_input_size=224 --model_name="$model_name" --Degradation_type='DownBlur' --device='mps' --magnification_factor=4 --inp_out_channels=3 --patch_size=56 --stride=32 --destination_path='./Abraham_Lincoln_sr.jpg' --img_lr_path='./Abraham_Lincoln_lr.jpg' --UNet_type='Residual Attention UNet' 

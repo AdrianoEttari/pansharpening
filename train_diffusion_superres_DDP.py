@@ -349,7 +349,7 @@ class Diffusion:
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
         # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
-        ema = EMA(model, decay=0.995)############################# EMA ############################
+        ema = EMA(beta=0.995)############################# EMA ############################
         ema_model = copy.deepcopy(model).eval().requires_grad_(False)############################# EMA ############################
 
         if loss == 'MSE':
