@@ -187,7 +187,6 @@ convert_png_to_jpg('lr_ANIME.png', 'lr_ANIME.jpg')
 convert_png_to_jpg('sr_ANIME.png', 'sr_ANIME.jpg')
 # %%
 
-# %%
 from utils import convert_png_to_jpg
 convert_png_to_jpg('imgsli_2.png', 'imgsli_2.jpg')
 # %%
