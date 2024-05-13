@@ -114,7 +114,7 @@ def launch(args):
     from torchvision import transforms
     from torch.nn import functional as F
     import matplotlib.pyplot as plt
-    from train_diffusion_superres import Diffusion
+    from train_diffusion_superres_COMPLETE import Diffusion
     from UNet_model_superres import Residual_Attention_UNet_superres
     import os  
 
@@ -165,7 +165,8 @@ def launch(args):
         snapshot_path=snapshot_path,
         noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
         magnification_factor=magnification_factor,device=device,
-        image_size=model_input_size, model_name=model_name, Degradation_type=Degradation_type)
+        image_size=model_input_size, model_name=model_name, Degradation_type=Degradation_type,
+        multiple_gpus=False, ema_smoothing=False) # Remember that for sampling we don't need to do anything about EMA
     
     aggregation_sampling = split_aggregation_sampling(img_lr, patch_size, stride, magnification_factor, diffusion, device)
     final_pred = aggregation_sampling.aggregation_sampling()
