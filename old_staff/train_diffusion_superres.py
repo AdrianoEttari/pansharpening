@@ -1,20 +1,97 @@
 import os
-import logging
+# import logging
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
-from torchvision import datasets
+# from torchvision import datasets
 import imageio
-import numpy as np
+# import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres
+from utils import get_data_superres, get_data_superres_BSRGAN, get_data_superres_2
+# import copy
 
+from UNet_model_superres import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres, Residual_Attention_UNet_superres_2
 
-from old_staff.UNet_model_superres import SimpleUNet_superres
+import torch
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
+import torch.nn.functional as F
+
+class VGGPerceptualLoss(nn.Module):
+    def __init__(self, device):
+        super(VGGPerceptualLoss, self).__init__()
+        self.vgg = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features
+        # By using .features, we are considering just the convolutional part of the VGG network
+        # without considering the avg pooling and the fully connected layers which map the features to the 1000 classes
+        # and so, solve the classification task.
+        # self.vgg = nn.Sequential(*[self.vgg[i] for i in range(8)]) 
+        self.vgg.to(device)
+        self.vgg.eval()  # Set VGG to evaluation mode
+        self.device = device
+        # Freeze all VGG parameters
+        for param in self.vgg.parameters():
+            param.requires_grad = False
+        
+    def preprocess_image(self, image):
+        '''
+        The VGG network wants input sized (224,224), normalized and as pytorch tensor. 
+        '''
+        transform = transforms.Compose([
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        
+        if image.shape[-1] != 224:
+            try:
+                image = F.interpolate(image, size=(224, 224), mode='bicubic', align_corners=False)
+            except:
+                image = F.interpolate(image.to('cpu'),  size=(224, 224), mode='bicubic', align_corners=False).to(self.device)
+        
+        return transform(image)
+    
+    def forward(self, x, y):
+        x = self.preprocess_image(x)
+        y = self.preprocess_image(y)
+
+        x_features = self.vgg(x)
+        y_features = self.vgg(y)
+
+        return torch.mean((x_features-y_features)**2)
+
+class CombinedLoss(nn.Module):
+    def __init__(self, first_loss, second_loss, weight_first=0.5):
+        super(CombinedLoss, self).__init__()
+        self.first_loss = first_loss
+        self.second_loss = second_loss
+        self.weight_first = weight_first  
+
+    def forward(self, predicted, target):
+        first_loss_value = self.first_loss(predicted, target)
+        second_loss_value = self.second_loss(predicted, target)
+        combined_loss = self.weight_first * first_loss_value + (1-self.weight_first) * second_loss_value
+        return combined_loss
+    
+class CombinedLoss_MSE_PercLoss(nn.Module):
+    def __init__(self, MSE_loss, Perc_loss, weight_MSE_loss=0.5):
+        super(CombinedLoss_MSE_PercLoss, self).__init__()
+        self.MSE_loss = MSE_loss
+        self.Perc_loss = Perc_loss
+        self.weight_MSE_loss = weight_MSE_loss
+
+    def forward(self, predicted_noise, target_noise, hr_img, hr_img_noised, alpha_hat_t, epoch):
+        alpha_hat_t = alpha_hat_t[:, None, None, None]
+        MSE_loss_value = self.MSE_loss(predicted_noise, target_noise)
+        if epoch > 50:
+            hr_img_denoised = (hr_img_noised - torch.sqrt(1-alpha_hat_t)*predicted_noise)/torch.sqrt(alpha_hat_t)
+            Perc_loss_value = self.Perc_loss(hr_img_denoised, hr_img)
+            combined_loss = self.weight_MSE_loss * MSE_loss_value + (1-self.weight_MSE_loss) * Perc_loss_value
+            return combined_loss
+        else:
+            return MSE_loss_value
 
 class Diffusion:
     def __init__(
@@ -28,7 +105,8 @@ class Diffusion:
             magnification_factor=4,
             device='cuda',
             image_size=224,
-            model_name='superres'):
+            model_name='superres',
+            Degradation_type='BSRGAN'):
     
         self.noise_steps = noise_steps
         self.beta_start = beta_start
@@ -39,14 +117,15 @@ class Diffusion:
         self.device = device
         self.snapshot_path = snapshot_path
         self.model = model.to(self.device)
+        self.Degradation_type=Degradation_type
         
+        # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch (MAYBE WE CAN REMOVE IT FROM HERE)
+        self.epochs_run = 0
+
         # If a snapshot exists, we load it
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot()
-
-        # epoch_run is used by _save_snapshot and _load_snapshot to keep track of the current epoch (MAYBE WE CAN REMOVE IT FROM HERE)
-        self.epochs_run = 0
 
         self.noise_schedule = noise_schedule
 
@@ -105,7 +184,7 @@ class Diffusion:
 
     def noise_images(self, x, t):
         '''
-        ATTENTION: The error Ɛ is random, but how much of it we add to move forward depends on the Beta schedule.
+        ATTENTION: The error epsilon is random, but how much of it we add to move forward depends on the Beta schedule.
 
         Input:
             x: the image at time t=0
@@ -113,15 +192,16 @@ class Diffusion:
         
         Output:
             x_t: the image at the current timestep (x_t)
-            Ɛ: the error that we add to x_t to move forward
+            epsilon: the error that we add to x_t to move forward
         '''
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None] # Each None is a new dimension (e.g.
         # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)). It doens't add
         # them exatly in the same place, but it adds them in the place where the None is.
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
-        Ɛ = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
+        epsilon = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
-        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * Ɛ, Ɛ
+        # epsilon = 2 * (epsilon - epsilon.min()) / (epsilon.max() - epsilon.min()) - 1
+        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, epsilon
 
     def sample_timesteps(self, n):
         '''
@@ -159,7 +239,14 @@ class Diffusion:
         frames = []
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
-            x = torch.randn((n, input_channels, self.image_size, self.image_size)).to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
+            if self.Degradation_type.lower() == 'downblur':
+                x = torch.randn((n, input_channels, self.image_size, self.image_size))
+            elif self.Degradation_type.lower() == 'bsrgan':
+                x = torch.randn((n, input_channels, self.image_size*self.magnification_factor, self.image_size*self.magnification_factor))
+            else:
+                raise ValueError('The Degradation type must be either DownBlur or BSRGAN')
+            # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
+            x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
                 # Basically, each of the n image will be processed with the same integer time step t.
@@ -177,20 +264,19 @@ class Diffusion:
                     noise = torch.zeros_like(x) # we don't add noise (it's equal to 0) in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
                 if plot_gif_bool == True:
-                    os.makedirs(f'{os.getcwd()}/gif_result', exist_ok=True)
-                    plt.imshow(x[0][0].cpu().numpy(), cmap='gray')
-                    plt.savefig(f'{os.getcwd()}/gif_result/frame_{i}.png')
+                    plt.imshow(x[0][0].cpu().numpy())
+                    plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png'))
                     plt.title(f't-step={i}', fontsize=30)
-                    frames.append(imageio.imread(f'{os.getcwd()}/gif_result/frame_{i}.png'))
-                    os.remove(f'{os.getcwd()}/gif_result/frame_{i}.png')
+                    frames.append(imageio.imread(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png')))
+                    os.remove(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png'))
         if plot_gif_bool == True:
-            imageio.mimsave(os.path.join(f'{os.getcwd()}/gif_result',f'gif_{self.model_name}.gif'), frames, duration=0.25) 
+            imageio.mimsave(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'gif_result.gif'), frames, duration=0.25) 
         model.train() # enables dropout and batch normalization
-        x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
+        # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
         # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 
         # otherwise outputs them. The same (but opposit reasoning) for the maximum.
         # +1 and /2 just to bring the values back to 0 to 1.
-        x = (x * 255).type(torch.uint8)
+        # x = (x * 255).type(torch.uint8)
         return x
 
     def _save_snapshot(self, epoch, model):
@@ -222,25 +308,34 @@ class Diffusion:
         self.model.load_state_dict(snapshot["MODEL_STATE"])
         self.epochs_run = snapshot["EPOCHS_RUN"]
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
+        # from collections import OrderedDict
+        # print(self.device)
+        # print(self.snapshot_path)
 
-    def early_stopping(self, epoch, model, patience, epochs_without_improving):
+        # snapshot = torch.load(self.snapshot_path, map_location='cpu')
+        # model_state = OrderedDict((key.replace('module.', ''), value) for key, value in snapshot['MODEL_STATE'].items())
+        # self.model.module.load_state_dict(model_state)
+        # self.model.module.to(self.device)
+        # self.epochs_run = snapshot["EPOCHS_RUN"]
+        # print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
+
+    def early_stopping(self, patience, epochs_without_improving):
         '''
-        This function checks if the validation loss is increasing. If it is for more than patience times, then it returns True (that will correspond to breaking the training loop)
-        and saves the weights of the model.
+        This function checks if the validation loss is increasing. If it is for more than patience times,
+        then it returns True (that will correspond to breaking the training loop).
         '''
         if epochs_without_improving >= patience:
             print('Early stopping! Training stopped')
-            self._save_snapshot(epoch, model)
             return True
 
-    def train(self, lr, epochs, save_every, train_loader, val_loader, patience, loss, verbose):
+    def train(self, lr, epochs, check_preds_epoch, train_loader, val_loader, patience, loss, verbose):
         '''
         This function performs the training of the model, saves the snapshots and the model at the end of the training each self.every_n_epochs epochs.
 
         Input:
             lr: the learning rate
             epochs: the number of epochs
-            save_every: the frequency at which the model weights will be saved
+            check_preds_epoch: the frequency at which the model will save the predictions
             train_loader: the training loader
             val_loader: the validation loader
             patience: the number of epochs after which the training will be stopped if the validation loss is increasing
@@ -249,10 +344,11 @@ class Diffusion:
         '''
         model = self.model
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        # optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
         # Basically, weight decay is a regularization technique that penalizes large weights. It's a way to prevent overfitting. In AdamW, 
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
+        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
         if loss == 'MSE':
             loss_function = nn.MSELoss()
@@ -260,11 +356,19 @@ class Diffusion:
             loss_function = nn.L1Loss()
         elif loss == 'Huber':
             loss_function = nn.HuberLoss() 
-
+        elif loss == 'MSE+Perceptual_noise':
+            vgg_loss = VGGPerceptualLoss(self.device)
+            mse_loss = nn.MSELoss()
+            loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.3)
+        elif loss == 'MSE+Perceptual_imgs':
+            vgg_loss = VGGPerceptualLoss(self.device)
+            mse_loss = nn.MSELoss()
+            loss_function = CombinedLoss_MSE_PercLoss(MSE_loss=mse_loss, Perc_loss=vgg_loss, weight_MSE_loss=0.3)
+        
         epochs_without_improving = 0
         best_loss = float('inf')  
 
-        for epoch in range(epochs):
+        for epoch in range(self.epochs_run, epochs):
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
@@ -279,7 +383,6 @@ class Diffusion:
             
             model.train()   
             for i,(lr_img,hr_img) in enumerate(pbar_train):
-                
                 lr_img = lr_img.to(self.device)
                 hr_img = hr_img.to(self.device)
 
@@ -291,7 +394,11 @@ class Diffusion:
 
                 predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
 
-                train_loss = loss_function(predicted_noise, noise)
+                if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
+                    train_loss = loss_function(predicted_noise, noise)
+                elif loss == 'MSE+Perceptual_imgs':
+                    train_loss = loss_function(predicted_noise, noise, hr_img, x_t, self.alpha_hat[t], epoch)
+                
                 train_loss.backward() # compute the gradients
                 optimizer.step() # update the weights
                 
@@ -300,26 +407,31 @@ class Diffusion:
             
                 running_train_loss += train_loss.item()
             
-            scheduler.step()
+            # scheduler.step()
 
             running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
-            if epoch % save_every == 0:
-                self._save_snapshot(epoch, model)
-                fig, axs = plt.subplots(5,3, figsize=(15,15))
+            if epoch % check_preds_epoch == 0:
+                if val_loader is None:
+                    self._save_snapshot(epoch, model)
+
+                fig, axs = plt.subplots(5,4, figsize=(15,15))
                 for i in range(5):
                     lr_img = val_loader.dataset[i][0]
                     hr_img = val_loader.dataset[i][1]
 
                     superres_img = self.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
+                    residual_img = hr_img.to(self.device) - superres_img[0].to(self.device)
 
                     axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
                     axs[i,0].set_title('Low resolution image')
                     axs[i,1].imshow(hr_img.permute(1,2,0).cpu().numpy())
                     axs[i,1].set_title('High resolution image')
                     axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
-                    axs[i,2].set_title('Super resolution image (model)')
+                    axs[i,2].set_title('Super resolution image')
+                    axs[i,3].hist(residual_img.permute(1,2,0).cpu().numpy().ravel())
+                    axs[i,3].set_title('Residual image')
 
                 plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
 
@@ -337,7 +449,10 @@ class Diffusion:
                         
                         predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
 
-                        val_loss = loss_function(predicted_noise, noise)
+                        if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
+                            val_loss = loss_function(predicted_noise, noise)
+                        elif loss == 'MSE+Perceptual_imgs':    
+                            val_loss = loss_function(predicted_noise, noise, hr_img, x_t, self.alpha_hat[t], epoch)
 
                         if verbose:
                             pbar_val.set_postfix(LOSS=val_loss.item()) # set_postfix just adds a message or value
@@ -353,10 +468,11 @@ class Diffusion:
                 if running_val_loss < best_loss - 0:
                     best_loss = running_val_loss
                     epochs_without_improving = 0
+                    self._save_snapshot(epoch, model)
                 else:
                     epochs_without_improving += 1
 
-                if self.early_stopping(epoch, model, patience, epochs_without_improving):
+                if self.early_stopping(patience, epochs_without_improving):
                     break
             print('Epochs without improving: ', epochs_without_improving)
 
@@ -371,7 +487,8 @@ def launch(args):
         lr: the learning rate
         epochs: the number of epochs
         noise_schedule: the noise schedule (linear, cosine)
-        save_every: specifies the frequency, in terms of epochs, at which the model weights will be saved
+        check_preds_epoch: specifies the frequency, in terms of epochs, at which the model will perform predictions and save them. Moreover,
+            if val_loader=None then the weights of the model will be saved at this frequency.
         snapshot_name: the name of the snapshot file
         snapshot_folder_path: the folder path where the snapshots will be saved
         model_name: the name of the model
@@ -383,6 +500,7 @@ def launch(args):
         plot_gif_bool: if True, the function will plot a gif with the generated images for each class
         magnification_factor: the magnification factor (i.e. the factor by which the image is magnified in the super-resolution task)
         loss: the loss function to use
+        UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
 
     Output:
         None
@@ -393,7 +511,7 @@ def launch(args):
     lr = args.lr
     epochs = args.epochs
     noise_schedule = args.noise_schedule
-    save_every = args.save_every
+    check_preds_epoch = args.check_preds_epoch
     snapshot_name = args.snapshot_name
     snapshot_folder_path = args.snapshot_folder_path
     model_name = args.model_name
@@ -404,31 +522,71 @@ def launch(args):
     plot_gif_bool = args.plot_gif_bool
     magnification_factor = args.magnification_factor
     loss = args.loss
-    
+    UNet_type = args.UNet_type
+    Degradation_type = args.Degradation_type
+    num_crops = args.num_crops
 
+    print(f'Using {Degradation_type} degradation')
     os.makedirs(snapshot_folder_path, exist_ok=True)
     os.makedirs(os.path.join(os.curdir, 'models_run', model_name, 'results'), exist_ok=True)
+    
+    if Degradation_type.lower() == 'downblur':
+        if image_size % magnification_factor != 0:
+            raise ValueError('The image size must be a multiple of the magnification factor')
+        
+        transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        ]) # The transforms.ToTensor() is in the get_data_superres function (in there
+        # first is applied this transform to y, then the resize according to the magnification_factor
+        # in order to get the x which is the lr_img and finally the to_tensor for both x
+        # and y is applied)
 
-    transform = transforms.Compose([
-    transforms.Resize((image_size, image_size)),
-    ]) # The transforms.ToTensor() is in the get_data_superres function (in there
-    # first is applied this transform to y, then the resize according to the magnification_factor
-    # in order to get the x which is the lr_img and finally the to_tensor for both x
-    # and y is applied)
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
 
-    train_path = f'{dataset_path}/train_original'
-    valid_path = f'{dataset_path}/val_original'
+        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, False, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, False, 'PIL', transform)
+        
+    elif Degradation_type.lower() == 'bsrgan':
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
 
-    train_dataset = get_data_superres(train_path, magnification_factor, 'PIL', transform)
-    val_dataset = get_data_superres(valid_path, magnification_factor, 'PIL', transform)
+        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
+        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
+
+    elif Degradation_type.lower() == 'downblurnoise':
+        train_path = f'{dataset_path}/train_original'
+        valid_path = f'{dataset_path}/val_original'
+
+        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, True, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, True, 'PIL', transform)
+        # train_dataset = get_data_superres_2(train_path, magnification_factor, image_size)
+        # val_dataset = get_data_superres_2(valid_path, magnification_factor, image_size)
+    else:
+        raise ValueError('The degradation type must be either BSRGAN or DownBlur or DownBlurNoise')
+
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
 
-    # The width is needed to establish the kernel size in the layers of the model
-    width = train_dataset[0][1].shape[1]
-
-    model = SimpleUNet_superres(width, input_channels, output_channels, device).to(device)
+    
+    if UNet_type.lower() == 'attention unet':
+        print('Using Attention UNet')
+        model = Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    elif UNet_type.lower() == 'residual attention unet':
+        print('Using Residual Attention UNet')
+        model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
+    elif UNet_type.lower() == 'residual attention unet 2':
+        print('Using Residual Attention UNet 2')
+        model = Residual_Attention_UNet_superres_2(input_channels, output_channels, device).to(device)
+    elif UNet_type.lower() == 'residual multihead attention unet':
+        print('Using Residual MultiHead Attention UNet')
+        model = Residual_MultiHeadAttention_UNet_superres(input_channels, output_channels, device).to(device)
+    elif UNet_type.lower() == 'residual visual multihead attention unet':
+        print('Using Residual Visual MultiHead Attention UNet')
+        model = Residual_Visual_MultiHeadAttention_UNet_superres(input_channels, image_size ,output_channels, device).to(device)
+    else:
+        raise ValueError('The UNet type must be either Attention UNet or Residual Attention UNet or Residual Attention UNet 2 or Residual MultiHead Attention UNet or Residual Visual MultiHeadAttention UNet superres')
     print("Num params: ", sum(p.numel() for p in model.parameters()))
 
     snapshot_path = os.path.join(snapshot_folder_path, snapshot_name)
@@ -438,20 +596,21 @@ def launch(args):
         snapshot_path=snapshot_path,
         noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
         magnification_factor=magnification_factor,device=device,
-        image_size=image_size, model_name=model_name)
+        image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
 
     # Training 
     diffusion.train(
-        lr=lr, epochs=epochs, save_every=save_every,
+        lr=lr, epochs=epochs, check_preds_epoch=check_preds_epoch,
         train_loader=train_loader, val_loader=val_loader, patience=patience, loss=loss, verbose=True)
     
     # Sampling
-    fig, axs = plt.subplots(5,3, figsize=(15,15))
+    fig, axs = plt.subplots(5,4, figsize=(15,15))
     for i in range(5):
         lr_img = train_dataset[i][0]
         hr_img = train_dataset[i][1]
 
         superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=plot_gif_bool)
+        residual_img = hr_img.to(device) - superres_img[0].to(device)
 
         axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
         axs[i,0].set_title('Low resolution image')
@@ -459,10 +618,10 @@ def launch(args):
         axs[i,1].set_title('High resolution image')
         axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
         axs[i,2].set_title('Super resolution image')
+        axs[i,3].hist(residual_img.permute(1,2,0).cpu().numpy().ravel())
+        axs[i,3].set_title('Residual image')
 
     plt.savefig(os.path.join(os.getcwd(), 'models_run', model_name, 'results', 'superres_results.png'))
-
-    
 
 
 if __name__ == '__main__':
@@ -472,7 +631,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--image_size', type=int)
     parser.add_argument('--lr', type=float, default=3e-4)
-    parser.add_argument('--save_every', type=int, default=20)
+    parser.add_argument('--check_preds_epoch', type=int, default=20)
     parser.add_argument('--noise_schedule', type=str, default='cosine')
     parser.add_argument('--snapshot_name', type=str, default='snapshot.pt')
     parser.add_argument('--model_name', type=str)
@@ -484,6 +643,9 @@ if __name__ == '__main__':
     parser.add_argument('--plot_gif_bool', type=bool, default=False)
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int, default=4)
+    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual Attention UNet 2' or 'Residual MultiHead Attention UNet' or 'Residual Visual MultiHead Attention UNet'
+    parser.add_argument('--Degradation_type', type=str, default='DownBlur') # 'BSRGAN' or 'DownBlur' or 'DownBlurNoise'
+    parser.add_argument('--num_crops', type=int, default=1)
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
     launch(args)
