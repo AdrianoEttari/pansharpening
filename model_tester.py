@@ -135,23 +135,59 @@ model_tester(['DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_Down
 #               ['residual attention unet 2', 'residual attention unet'],
 #               ['snapshot.pt', 'snapshot.pt'], test_img_lr, device, test_img_hr)
 
+# %%
+from PIL import Image
+from torchvision import transforms
+from UNet_model_superres import Residual_Attention_UNet_superres
+import os
+from utils import get_data_superres
+from torchvision import transforms
+from train_diffusion_superres_COMPLETE import Diffusion
 
-# sr_test_path = 'sr_satellite_imgs_test'
-# for test_img_lr_path in os.listdir(folder_test_img_lr_path):
-#     test_img_lr_full_path = os.path.join(folder_test_img_lr_path, test_img_lr_path)
-#     test_img_lr = Image.open(test_img_lr_full_path)
-#     test_img_lr = transform_lr(test_img_lr)
-#     test_img_lr = transforms.ToTensor()(test_img_lr)
-#     print(test_img_lr.shape)
-#     model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_DIV2k_512'],
-#               ['snapshot.pt'], test_img_lr, device, save_path=os.path.join(sr_test_path, test_img_lr_path))
+def superresoluter(lr_img):
+    model_name = 'DDP_Residual_Attention_UNet_superres_EMA_magnification4_ANIME50k_DownBlur'
+    device = 'mps'
+    model = Residual_Attention_UNet_superres(3, 3, device).to(device)
+    snapshot_path = os.path.join('models_run', model_name, 'weights','snapshot.pt')
+    noise_schedule ='cosine'
+    noise_steps = 1500
+    magnification_factor = 4
+    image_size = 256
+    Degradation_type = 'DownBlur'
 
-# sr_test_path = 'sr_DIV2k'
-# for i, img_path in enumerate(test_dataset):
-#     test_img_lr = img_path[0]
-#     test_img_hr = img_path[1]
-#     model_tester(['DDP_Residual_Attention_UNet_superres_magnification4_DIV2k_512'],
-#               ['snapshot.pt'], test_img_lr, device, test_img_hr, save_path=os.path.join(sr_test_path, f'{i}.png'))
+    diffusion = Diffusion(
+            noise_schedule=noise_schedule, model=model,
+            snapshot_path=snapshot_path,
+            noise_steps=noise_steps, beta_start=1e-4, beta_end=0.02, 
+            magnification_factor=magnification_factor,device=device,
+            image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
+    
+    super_lr_img = diffusion.sample(1, model, lr_img, input_channels=3, plot_gif_bool=False)
+    super_lr_img = super_lr_img.clip(0,1)
+    super_lr_img = super_lr_img[0]
+    super_lr_img = transforms.ToPILImage()(super_lr_img)
+    return super_lr_img
 
 
+
+transform = transforms.Compose([
+        transforms.Resize((256, 256), interpolation=transforms.InterpolationMode.BICUBIC),
+        ])
+test_path = 'anime_data_10k/test_original'
+magnification_factor = 4
+
+test_data = get_data_superres(test_path, magnification_factor, 0.5, False, 'PIL', transform)
+
+lr_img = test_data[5][0]
+sr_img = superresoluter(lr_img)
+# %%
+lr_img = transforms.ToPILImage()(lr_img).resize((256,256),Image.BICUBIC)
+from utils import convert_png_to_jpg
+convert_png_to_jpg('lr_ANIME.png', 'lr_ANIME.jpg')
+convert_png_to_jpg('sr_ANIME.png', 'sr_ANIME.jpg')
+# %%
+
+# %%
+from utils import convert_png_to_jpg
+convert_png_to_jpg('imgsli_2.png', 'imgsli_2.jpg')
 # %%
