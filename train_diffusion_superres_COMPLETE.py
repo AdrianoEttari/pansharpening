@@ -245,7 +245,7 @@ class Diffusion:
         with torch.no_grad(): # disables gradient calculation
             if self.Degradation_type.lower() == 'downblur':
                 x = torch.randn((n, input_channels, self.image_size, self.image_size))
-            elif self.Degradation_type.lower() == 'bsrgan':
+            elif self.Degradation_type.lower() == 'bsrgan' or self.Degradation_type.lower() == 'downblurnoise':
                 x = torch.randn((n, input_channels, self.image_size*self.magnification_factor, self.image_size*self.magnification_factor))
             else:
                 raise ValueError('The degradation type must be either BSRGAN or DownBlur')
