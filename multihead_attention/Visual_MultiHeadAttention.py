@@ -59,12 +59,12 @@ class Embedding(nn.Module):
         self.input_channels = input_channels
         self.image_embedding = ImageEncoding(self.input_channels, patch_size, stride, embedding_dim, device=self.device)
         self.embedding_dim = self.image_embedding.embedding_dim  
-        # self.positional_encoding = PositionalEncoding(self.image_size, self.batch_size, self.embedding_dim, patch_size)
-        # self.num_patches = self.positional_encoding.num_patch
+        self.positional_encoding = PositionalEncoding(self.image_size, self.batch_size, self.embedding_dim, patch_size)
+        self.num_patches = self.positional_encoding.num_patch
 
     def forward(self, x):
         x = self.image_embedding(x)
-        # x = self.positional_encoding(x)
+        x = self.positional_encoding(x)
         return x
 
 class MultiheadAttention(nn.Module):
@@ -78,11 +78,11 @@ class MultiheadAttention(nn.Module):
         assert embedding_dim % head == 0, "embedding_dim must be divisible by head"
         self.head_dim = embedding_dim // head
 
-        # self.w_q = nn.Linear(in_features=embedding_dim, out_features=embedding_dim, device=self.device)
-        # self.w_k = nn.Linear(in_features=embedding_dim, out_features=embedding_dim, device=self.device)
-        # self.w_v = nn.Linear(in_features=embedding_dim, out_features=embedding_dim, device=self.device)
+        self.w_q = nn.Linear(in_features=embedding_dim, out_features=embedding_dim, device=self.device)
+        self.w_k = nn.Linear(in_features=embedding_dim, out_features=embedding_dim, device=self.device)
+        self.w_v = nn.Linear(in_features=embedding_dim, out_features=embedding_dim, device=self.device)
 
-        # self.w_o = nn.Linear(in_features=embedding_dim, out_features=embedding_dim, device=self.device)
+        self.w_o = nn.Linear(in_features=embedding_dim, out_features=embedding_dim, device=self.device)
 
 
     def attention(self, q, k, v, mask=None):
@@ -95,10 +95,9 @@ class MultiheadAttention(nn.Module):
         return x
 
     def forward(self, q,k,v ,mask= None):
-        # q,k,v = (batch_size, num_patches+1, embedding_dim)
-        # q1 = self.w_q(q)
-        # k1 = self.w_k(k)
-        # v1 = self.w_v(v)
+        q1 = self.w_q(q) #(batch_size, num_patches+1, embedding_dim)
+        k1 = self.w_k(k) #(batch_size, num_patches+1, embedding_dim)
+        v1 = self.w_v(v) #(batch_size, num_patches+1, embedding_dim)
         q1 = q
         k1 = k
         v1 = v

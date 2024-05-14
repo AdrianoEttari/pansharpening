@@ -564,9 +564,8 @@ def launch(args):
 
     if dataset_path.lower() == 'cifar10':
         transform = transforms.Compose(
-        [transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-        train_dataset = torchvision.datasets.CIFAR10(root='./data', train=True,
+        [transforms.ToTensor()])
+        train_dataset = torchvision.datasets.CIFAR10(root='./Cifar10', train=True,
                                             download=True, transform=transform)
         image_size = train_dataset[0][0].shape[-1]
     else:
