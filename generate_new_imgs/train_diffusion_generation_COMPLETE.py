@@ -1,5 +1,4 @@
 import os
-# import logging
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
@@ -7,14 +6,12 @@ import torch.optim
 import torch.utils.data
 from torchvision import datasets
 import torchvision.transforms as transforms
-# from torchvision import datasets
 import imageio
-# import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
 import copy
 import numpy as np
-
+import torchvision
 
 from UNet_model_generation import Residual_Attention_UNet_generation,EMA
 
@@ -565,15 +562,21 @@ def launch(args):
     else:
         print('Using a single GPU')
 
-    transform = transforms.Compose([
-    transforms.Resize((image_size, image_size)),
-    transforms.ToTensor(),
-        ]) 
+    if dataset_path.lower() == 'cifar10':
+        transform = transforms.Compose(
+        [transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        train_dataset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                            download=True, transform=transform)
+        image_size = train_dataset[0][0].shape[-1]
+    else:
+        transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        transforms.ToTensor(),
+            ]) 
+        train_path = f'../{dataset_path}'
+        train_dataset = datasets.ImageFolder(train_path, transform=transform)
 
-    train_path = f'../{dataset_path}'
-
-    train_dataset = datasets.ImageFolder(train_path, transform=transform)
-        
     if multiple_gpus:
         train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(train_dataset))
     else:
@@ -652,7 +655,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=' ')
     parser.add_argument('--epochs', type=int, default=501)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--image_size', type=int)
+    parser.add_argument('--image_size', type=int, default=None)
     parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--check_preds_epoch', type=int, default=20)
     parser.add_argument('--noise_schedule', type=str, default='cosine')
