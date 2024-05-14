@@ -15,9 +15,10 @@ The following are examples of super resolution of our model.
 
 
 ### TODO
-- [ ] Add MultiHead Attention
+- [ ] Add MultiHead Attention from Vision Transformer 
 - [ ] Incorporate the Diffusion Model in a Latent Diffusion Model
 - [ ] Substitute the simple Blur-Down-Gauss degradation with the BSR-degradation algorithm
+- [ ] Improve the Aggregation Sampling (it is not working properly)
 - [x] ~~Add Aggregation Sampling~~
 
 ### Train
