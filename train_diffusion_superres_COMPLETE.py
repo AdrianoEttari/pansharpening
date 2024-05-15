@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 import imageio
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_superres, get_data_superres_BSRGAN, get_data_superres_2
+from utils import get_data_superres, get_data_superres_BSRGAN
 import copy
 
 from UNet_model_superres import Residual_Attention_UNet_superres, Attention_UNet_superres, Residual_MultiHeadAttention_UNet_superres, Residual_Visual_MultiHeadAttention_UNet_superres, Residual_Attention_UNet_superres_2, EMA
@@ -633,8 +633,8 @@ def launch(args):
         train_path = f'{dataset_path}/train_original'
         valid_path = f'{dataset_path}/val_original'
 
-        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
-        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
+        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
+        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
 
     elif Degradation_type.lower() == 'downblurnoise':
         train_path = f'{dataset_path}/train_original'
@@ -642,8 +642,8 @@ def launch(args):
 
         # train_dataset = get_data_superres(train_path, magnification_factor, 0.5, True, 'PIL', transform)
         # val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, True, 'PIL', transform)
-        train_dataset = get_data_superres_2(train_path, magnification_factor, image_size)
-        val_dataset = get_data_superres_2(valid_path, magnification_factor, image_size)
+        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='soft_BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
+        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='soft_BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
     else:
         raise ValueError('The degradation type must be either BSRGAN or DownBlur or DownBlurNoise')
 

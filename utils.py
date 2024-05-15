@@ -120,7 +120,7 @@ class get_data_superres_BSRGAN(Dataset):
 
     __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
     '''
-    def __init__(self, root_dir, magnification_factor, model_input_size, num_crops, destination_folder=None):
+    def __init__(self, root_dir, magnification_factor, model_input_size, num_crops, degradation_type='BSR_plus', destination_folder=None):
         self.root_dir = root_dir
         self.magnification_factor = magnification_factor
         self.model_input_size = model_input_size
@@ -128,6 +128,7 @@ class get_data_superres_BSRGAN(Dataset):
         self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
         self.num_crops = num_crops
         self.x_images, self.y_images = self.BSR_degradation()
+        self.degradation_type = degradation_type
         if destination_folder is not None:
             self.dataset_saver(destination_folder)
 
@@ -142,7 +143,10 @@ class get_data_superres_BSRGAN(Dataset):
             y_path = os.path.join(self.original_imgs_dir, self.y_filenames[i])
             for _ in range(self.num_crops):
                 y = imread_uint(y_path, 3)
-                x, y = degradation_bsrgan_plus(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
+                if self.degradation_type == 'BSR_plus':
+                    x, y = degradation_bsrgan_plus(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
+                elif self.degradation_type == 'soft_BSR_plus':
+                    x, y = soft_degradation_bsrgan(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
                 x = single2uint(x)
                 y = single2uint(y)
                 to_tensor = transforms.ToTensor()
@@ -184,42 +188,6 @@ class get_data_superres_BSRGAN(Dataset):
     def __getitem__(self, idx):
         x = self.x_images[idx]
         y = self.y_images[idx]
-
-        return x, y
-
-class get_data_superres_2(Dataset):
-    '''
-    This class allows to store the data in a Dataset that can be used in a DataLoader
-    like that train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True).
-
-    -Input:
-        root_dir: path to the folder where the data is stored. 
-        magnification_factor: factor by which the original images are downsampled.
-        model_input_size: size of the input images to the model.
-    -Output:
-        A Dataset object that can be used in a DataLoader.
-
-    __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
-    '''
-    def __init__(self, root_dir, magnification_factor, model_input_size):
-        self.root_dir = root_dir
-        self.magnification_factor = magnification_factor
-        self.model_input_size = model_input_size
-        self.original_imgs_dir = os.path.join(self.root_dir)
-        self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
-
-    def __len__(self):
-        return len(self.y_filenames)
-
-    def __getitem__(self, idx):
-        y_path = os.path.join(self.original_imgs_dir, self.y_filenames[idx])
-        y = imread_uint(y_path, 3)
-        x, y = soft_degradation_bsrgan(y, sf=self.magnification_factor, lq_patchsize=self.model_input_size)
-        x = single2uint(x)
-        y = single2uint(y)
-        to_tensor = transforms.ToTensor()
-        x = to_tensor(x)
-        y = to_tensor(y)
 
         return x, y
     
