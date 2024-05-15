@@ -489,7 +489,7 @@ class Diffusion:
                         axs[i,2].imshow(superres_img[0].permute(1,2,0).cpu().numpy())
                         axs[i,2].set_title('Super resolution image')
 
-                plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
+                    plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
 
             if val_loader is not None:
                 with torch.no_grad():
