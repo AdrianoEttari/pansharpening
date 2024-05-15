@@ -4,7 +4,7 @@
 conda activate pansharpening
 
 model_name='UNet_Faces_superres_TO_REMOVE'
-python train_diffusion_superres_COMPLETE.py --epochs=1 --noise_schedule='cosine' --batch_size=8 --image_size=256 --lr=2e-4 --snapshot_name=snapshot.pt --model_name="$model_name" --noise_steps=2 --dataset_path='sentinel_data_s2' --inp_out_channels=3 --loss=MSE --magnification_factor=4 --UNet_type='Residual Attention UNet' --Degradation_type='DownBlurNoise' --multiple_gpus='False' --ema_smoothing='False'
+python train_diffusion_superres_COMPLETE.py --epochs=1 --noise_schedule='cosine' --batch_size=8 --image_size=256 --lr=2e-4 --snapshot_name=snapshot.pt --model_name="$model_name" --noise_steps=2 --dataset_path='sentinel_data_s2' --inp_out_channels=3 --loss=MSE --magnification_factor=2 --UNet_type='Residual Attention UNet' --Degradation_type='DownBlurNoise' --multiple_gpus='False' --ema_smoothing='True'
 
 # model_name='UNet_Faces_superres_EMA_MSE_CelebA_magnification4'
 # python train_diffusion_superres_EMA.py --epochs=1 --noise_schedule='cosine' --batch_size=2 --image_size=172 --lr=5e-4 --snapshot_name=snapshot.pt --model_name="$model_name" --noise_steps=1500 --device='cpu' --dataset_path='celebA_25k' --inp_out_channels=3 --loss=MSE --magnification_factor=4

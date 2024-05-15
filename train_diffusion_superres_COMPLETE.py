@@ -246,7 +246,7 @@ class Diffusion:
             if self.Degradation_type.lower() == 'downblur':
                 x = torch.randn((n, input_channels, self.image_size, self.image_size))
             elif self.Degradation_type.lower() == 'bsrgan' or self.Degradation_type.lower() == 'downblurnoise':
-                x = torch.randn((n, input_channels, self.image_size*self.magnification_factor, self.image_size*self.magnification_factor))
+                x = torch.randn((n, input_channels, self.image_size, self.image_size))
             else:
                 raise ValueError('The degradation type must be either BSRGAN or DownBlur')
             # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
@@ -471,7 +471,7 @@ class Diffusion:
                             self._save_snapshot(epoch, ema_model)############################# EMA ############################
                         else:
                             self._save_snapshot(epoch, model)
-                        
+
                     fig, axs = plt.subplots(5,3, figsize=(15,15))
                     for i in range(5):
                         lr_img = val_loader.dataset[i][0]
@@ -640,10 +640,15 @@ def launch(args):
         train_path = f'{dataset_path}/train_original'
         valid_path = f'{dataset_path}/val_original'
 
-        # train_dataset = get_data_superres(train_path, magnification_factor, 0.5, True, 'PIL', transform)
-        # val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, True, 'PIL', transform)
-        train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='soft_BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
-        val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='soft_BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
+        transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        ])
+
+        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, True, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, True, 'PIL', transform)
+        # IF YOU WANT TO USE THE get_data BELOW, YOU NEED ALSO TO ADJUST THE STARTING TENSOR IN THE sample FUNCTION
+        # train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='soft_BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
+        # val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='soft_BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
     else:
         raise ValueError('The degradation type must be either BSRGAN or DownBlur or DownBlurNoise')
 
