@@ -641,7 +641,7 @@ def launch(args):
             axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
             axs[i,j].set_title(f'Class {i}')
 
-    plt.savefig(os.path.join('..', 'models_run', model_name, 'results', f'generation_results.png'))
+    plt.savefig(os.path.join('..', 'models_run', model_name, 'results', f'generation_results_2.png'))
 
 
 if __name__ == '__main__':
