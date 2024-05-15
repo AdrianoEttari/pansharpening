@@ -127,8 +127,8 @@ class get_data_superres_BSRGAN(Dataset):
         self.original_imgs_dir = os.path.join(self.root_dir)
         self.y_filenames = sorted(os.listdir(self.original_imgs_dir))
         self.num_crops = num_crops
-        self.x_images, self.y_images = self.BSR_degradation()
         self.degradation_type = degradation_type
+        self.x_images, self.y_images = self.BSR_degradation()
         if destination_folder is not None:
             self.dataset_saver(destination_folder)
 
@@ -137,6 +137,7 @@ class get_data_superres_BSRGAN(Dataset):
         This function takes as input the path of the original images, the magnification factor, the model input size
         and also the the number of crops to be generated from each image. It returns two lists with the lr and hr images.
         '''
+        import ipdb; ipdb.set_trace()
         x_images = []
         y_images = []
         for i in tqdm(range(len(self.y_filenames))):
@@ -314,7 +315,7 @@ def img_splitter(source_folder, destination_folder, desired_width, threshold_rat
                     counter += 1
 
 if __name__=="__main__":
-    main_folder = 'sentinel_data_s2'
+    main_folder = 'up42_sentinel2_patches'
     data_organizer = data_organizer(main_folder)
     data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
     for root, dirs, files in os.walk(main_folder):

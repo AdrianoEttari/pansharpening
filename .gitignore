@@ -176,6 +176,7 @@ sentinel_data_s2/
 sentinel_data_crops/
 models_run/
 imgs_sample/
+up42_sentinel2_patches/
 
 # Files
 *.pdf
