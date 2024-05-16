@@ -254,7 +254,7 @@ class Diffusion:
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
                 # Basically, each of the n image will be processed with the same integer time step t.
-                
+
                 predicted_noise = model(x, t, lr_img, self.magnification_factor)
 
                 alpha = self.alpha[t][:, None, None, None]

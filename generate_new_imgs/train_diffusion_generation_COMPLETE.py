@@ -427,7 +427,10 @@ class Diffusion:
 
                     fig, axs = plt.subplots(num_classes,5, figsize=(15,15))
                     for i in range(num_classes):
-                        prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+                        if self.ema_smoothing:
+                            prediction = self.sample(n=5,model=ema_model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+                        else:
+                            prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
                         for j in range(5):
                             axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
                             axs[i,j].set_title(f'Class {i}')
@@ -443,7 +446,10 @@ class Diffusion:
 
                     fig, axs = plt.subplots(num_classes,5, figsize=(15,15))
                     for i in range(num_classes):
-                        prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+                        if self.ema_smoothing:
+                            prediction = self.sample(n=5,model=ema_model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+                        else:
+                            prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
                         for j in range(5):
                             axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
                             axs[i,j].set_title(f'Class {i}')
@@ -529,7 +535,6 @@ def launch(args):
     Output:
         None
     '''
-    image_size = args.image_size
     dataset_path = args.dataset_path
     batch_size = args.batch_size
     lr = args.lr
@@ -567,8 +572,9 @@ def launch(args):
         [transforms.ToTensor()])
         train_dataset = torchvision.datasets.CIFAR10(root='./Cifar10', train=True,
                                             download=True, transform=transform)
-        image_size = train_dataset[0][0].shape[-1]
+        image_size = 32
     else:
+        image_size = args.image_size
         transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
@@ -641,7 +647,7 @@ def launch(args):
             axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
             axs[i,j].set_title(f'Class {i}')
 
-    plt.savefig(os.path.join('..', 'models_run', model_name, 'results', f'generation_results_2.png'))
+    plt.savefig(os.path.join('..', 'models_run', model_name, 'results', f'generation_results.png'))
 
 
 if __name__ == '__main__':
