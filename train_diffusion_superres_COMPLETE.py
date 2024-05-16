@@ -466,7 +466,7 @@ class Diffusion:
                     plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'superres_{epoch}_epoch.png'))
             else:
                 if epoch % check_preds_epoch == 0:
-                    if val_loader is None:
+                    if val_loader is None: # if there is no validation loader, then we save the weights at the frequency check_preds_epoch
                         if self.ema_smoothing:
                             self._save_snapshot(epoch, ema_model)############################# EMA ############################
                         else:
