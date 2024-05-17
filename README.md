@@ -14,8 +14,8 @@ The following are examples of super resolution of our model.
 
 The following are examples of image generation vs real of the famous dataset https://github.com/phelber/EuroSAT. The first set of images is the real one and the second set is the generated one.
 
-[<img src="assets/EuroSat_real.png" height="250px"/>]
-[<img src="assets/EuroSat_predictions.png" height="275px"/>]
+<img src="assets/EuroSat_real.png" height="250px"/>
+<img src="assets/EuroSat_predictions.png" height="265px"/>
 
 ### TODO
 - [ ] Add MultiHead Attention from Vision Transformer 
