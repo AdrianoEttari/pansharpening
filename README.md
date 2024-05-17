@@ -12,8 +12,7 @@ The following are examples of super resolution of our model.
 
 [<img src="assets/imgsli_1.jpg" height="224px"/>](https://imgsli.com/MjYyODA2) [<img src="assets/imgsli_2.jpg" height="512px"/>](https://imgsli.com/MjYzNzEy) 
 
-
-The following are examples of image generation.
+The following are examples of image generation regarding the famous dataset https://github.com/phelber/EuroSAT
 
 [<img src="assets/sentinel_data_crops_generated.png" height="500px"/>]
 
