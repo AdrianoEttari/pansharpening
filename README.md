@@ -25,9 +25,9 @@ The following are examples of image generation vs real of the famous dataset htt
 - [ ] The EMA model in train_diffusion_generation_COMPLETE.py doesn't work properly. It is a minor problem because in general the results with EMA are not different from the ones without it.
 - [x] ~~Add Aggregation Sampling~~
 
-### Train
+### Train (snippet to train a super resolution model on the anime dataset)
 ```
-python3 train_diffusion_superres_COMPLETE.py --epochs=200 --noise_schedule='cosine' --batch_size=32 --image_size=256 --lr=2e-4 --snapshot_name=snapshot.pt --model_name='UNet_Faces_superres_TO_REMOVE' --noise_steps=1500 --dataset_path='anime_data_50k' --inp_out_channels=3 --loss=MSE --magnification_factor=4 --UNet_type='Residual Attention UNet' --Degradation_type='DownBlur' --multiple_gpus='False' --ema_smoothing='True'
+python3 train_diffusion_superres_COMPLETE.py --epochs=501 --noise_schedule='cosine' --batch_size=64 --image_size=512 --lr=2e-4 --snapshot_name=snapshot.pt --model_name='DDP_Residual_Attention_UNet_superres_EMA_magnification4_ANIME50k_DownBlur' --noise_steps=1500 --dataset_path='anime_data_50k' --inp_out_channels=3 --loss=MSE --magnification_factor=4 --UNet_type='Residual Attention UNet' --Degradation_type='DownBlur' --multiple_gpus='False' --ema_smoothing='True'
 ```
 ### Contact
 If you have any questions, feel free to contact me at `adriano.ettari@unina.it`
