@@ -15,7 +15,7 @@ The following are examples of super resolution of our model.
 
 The following are examples of image generation.
 
-[<img src="assets/sentinel_data_crops_real.png" height="500px"/>]
+[<img src="assets/sentinel_data_crops_generated.png" height="500px"/>]
 
 ### TODO
 - [ ] Add MultiHead Attention from Vision Transformer 
