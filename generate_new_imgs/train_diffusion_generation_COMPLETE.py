@@ -486,7 +486,6 @@ class Diffusion:
                     running_val_loss /= len(val_loader.dataset)
                     print(f"Epoch {epoch}: Running Val loss ({loss}){running_val_loss}")
 
-
             if val_loader is not None:
                 if running_val_loss < best_loss - 0:
                     best_loss = running_val_loss
