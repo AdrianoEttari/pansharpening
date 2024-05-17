@@ -182,7 +182,6 @@ up42_sentinel2_fullsized/
 *.pdf
 .DS_Store
 *.pptx
-*.pt
 *.npy
 *.tif
 TO_REMOVE.py
