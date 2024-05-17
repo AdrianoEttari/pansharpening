@@ -6,6 +6,9 @@ from multihead_attention.MultiHeadAttention import MultiHeadAttention
 from einops import rearrange
 from multihead_attention.Visual_MultiHeadAttention import Visual_MultiHeadAttention
 
+#########################################################################################################
+#################################### Classes for all the UNet models ####################################
+#########################################################################################################
 class EMA:
     def __init__(self, beta):
         super().__init__()
@@ -111,6 +114,8 @@ class AttentionBlock_2(nn.Module):
     def __init__(self, f_x, f_int, device):
         '''
         AttentionBlock: Applies an attention mechanism to the input data.
+        Differently from AttentionBlock, this class does not take a 'g' input, but only an 'x' input and is used for 
+        the UNet model with interpolation instead of an up block.
         
         Args:
             f_x (int): Number of channels of two concatenated inputs.
@@ -306,7 +311,27 @@ class UpConvBlock(nn.Module):
         x = self.relu(self.batch_norm(self.conv(x)))
         output = self.transform(x)
         return output
+
+class gating_signal(nn.Module):
+    '''
+    This class is used to generate a gating signal that is used in the attention mechanism. It just applies a 1x1 convolution followed by a batch normalization and a ReLU activation that 
+    moves the depth dimension of the input tensor from in_dim to out_dim.
+    '''
+    def __init__(self, in_dim, out_dim, device):
+        super(gating_signal, self).__init__()
+        self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding='same', device=device)
+        self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
+        self.relu = nn.ReLU(inplace=False)
+        self.device = device
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.batch_norm(x)
+        return self.relu(x)  
     
+#########################################################################################################
+################################### Classes to apply to Low Res image ###################################
+#########################################################################################################
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
         super(ResidualBlock, self).__init__()
@@ -338,23 +363,9 @@ class RRDB(nn.Module):
         out += x
         return out
     
-class gating_signal(nn.Module):
-    '''
-    This class is used to generate a gating signal that is used in the attention mechanism. It just applies a 1x1 convolution followed by a batch normalization and a ReLU activation that 
-    moves the depth dimension of the input tensor from in_dim to out_dim.
-    '''
-    def __init__(self, in_dim, out_dim, device):
-        super(gating_signal, self).__init__()
-        self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding='same', device=device)
-        self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
-        self.relu = nn.ReLU(inplace=False)
-        self.device = device
-
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.batch_norm(x)
-        return self.relu(x)
-
+#########################################################################################################
+################################################ Models #################################################
+#########################################################################################################
 class Attention_UNet_superres(nn.Module):
     def __init__(self, image_channels=3, out_dim=3, device='cuda'):
         super().__init__()

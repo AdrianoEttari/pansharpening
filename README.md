@@ -13,12 +13,16 @@ The following are examples of super resolution of our model.
 [<img src="assets/imgsli_1.jpg" height="224px"/>](https://imgsli.com/MjYyODA2) [<img src="assets/imgsli_2.jpg" height="512px"/>](https://imgsli.com/MjYzNzEy) 
 
 
+The following are examples of image generation.
+
+[<img src="assets/sentinel_data_crops_real.png" height="224px"/>]
 
 ### TODO
 - [ ] Add MultiHead Attention from Vision Transformer 
 - [ ] Incorporate the Diffusion Model in a Latent Diffusion Model
 - [ ] Substitute the simple Blur-Down-Gauss degradation with the BSR-degradation algorithm
 - [ ] Improve the Aggregation Sampling (it is not working properly)
+- [ ] The EMA model in train_diffusion_generation_COMPLETE.py doesn't work properly. It is a minor problem because in general the results with EMA are not different from the ones without it.
 - [x] ~~Add Aggregation Sampling~~
 
 ### Train

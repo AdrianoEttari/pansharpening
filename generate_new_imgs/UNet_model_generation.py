@@ -6,6 +6,9 @@ import torch.nn.functional as F
 # from einops import rearrange
 # from multihead_attention.Visual_MultiHeadAttention import Visual_MultiHeadAttention
 
+#########################################################################################################
+#################################### Classes for all the UNet models ####################################
+#########################################################################################################
 class EMA:
     def __init__(self, beta):
         super().__init__()
@@ -275,6 +278,9 @@ class gating_signal(nn.Module):
         x = self.batch_norm(x)
         return self.relu(x)
 
+#########################################################################################################
+################################################ Models #################################################
+#########################################################################################################
 class Residual_Attention_UNet_generation(nn.Module):
     def __init__(self, image_channels=3, out_dim=3, num_classes=None, device='cuda'):
         super().__init__()
