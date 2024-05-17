@@ -12,10 +12,10 @@ The following are examples of super resolution of our model.
 
 [<img src="assets/imgsli_1.jpg" height="224px"/>](https://imgsli.com/MjYyODA2) [<img src="assets/imgsli_2.jpg" height="512px"/>](https://imgsli.com/MjYzNzEy) 
 
-The following are examples of image generation vs real of the famous dataset https://github.com/phelber/EuroSAT. Are you able to understand which is generated and which is real?
+The following are examples of image generation vs real of the famous dataset https://github.com/phelber/EuroSAT. The first set of images is the real one and the second set is the generated one.
 
 [<img src="assets/EuroSat_real.png" height="250px"/>]
-[<img src="assets/EuroSat_predictions.png" height="250px"/>]
+[<img src="assets/EuroSat_predictions.png" height="275px"/>]
 
 ### TODO
 - [ ] Add MultiHead Attention from Vision Transformer 
