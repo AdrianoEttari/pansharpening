@@ -17,6 +17,9 @@ The following are examples of image generation vs real of the famous dataset htt
 <img src="assets/EuroSat_real.png" height="250px"/>
 <img src="assets/EuroSat_predictions.png" height="265px"/>
 
+Next, we have some generations of the famous CIFAR10 dataset
+<img src="assets/CIFAR10_generated.png" height="250px"/>
+
 ### TODO
 - [ ] Add MultiHead Attention from Vision Transformer 
 - [ ] Incorporate the Diffusion Model in a Latent Diffusion Model
