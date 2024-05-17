@@ -146,7 +146,7 @@ def launch(args):
         assert img_lr.size[0] == img_lr.size[1] # Image must be square
     except:
         distances = []
-        possible_sizes = [64,128,256,512,1024]
+        possible_sizes = [64,128,256,512,1024,2048,4096,8192,10000]
         for size in possible_sizes:
             distance = 0
             distance += abs(size - img_lr.size[0])
