@@ -18,7 +18,7 @@ The following are examples of image generation vs real of the famous dataset htt
 <img src="assets/EuroSat_predictions.png" height="265px"/>
 
 Let's see some examples of super-resolution of a Sentinel-2 dataset. The first set of images is the low resolution one and the second set is the super resolved one.
-<img src="assets/UP42_SUPERRESOLUTION/DownBlur/lr_vs_sr.png" height="300px"/>
+<img src="assets/UP42_SUPERRESOLUTION/DownBlur/lr_vs_sr.png" height="500px"/>
 
 Next, we have some generations of the famous CIFAR10 dataset
 <img src="assets/CIFAR10_generated.png" height="250px"/>
