@@ -21,7 +21,7 @@ Let's see some examples of super-resolution of a Sentinel-2 dataset. The left im
 <img src="assets/UP42_SUPERRESOLUTION/DownBlur/lr_vs_sr.png" height="500px"/>
 
 Next, we have some generations of the famous CIFAR10 dataset
-<img src="assets/CIFAR10_generated.png" height="400px"/>
+<img src="assets/CIFAR10_generated.png" height="300px"/>
 
 ### TODO
 - [ ] Add MultiHead Attention from Vision Transformer 
