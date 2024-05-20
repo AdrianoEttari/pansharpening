@@ -30,6 +30,46 @@ def add_Gaussian_noise(img, noise_level1=2, noise_level2=25):
     img = torch.tensor(img).permute(2,0,1).to(torch.float)
     return img
 
+class get_data_SAR_TO_NDVI(Dataset):
+    '''
+    This class allows to store the data in a Dataset that can be used in a DataLoader
+    like that train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True).
+
+    -Input:
+        root_dir: path to the folder where the data is stored. 
+        transform: a torchvision.transforms.Compose object with the transformations that will be applied to the images.
+        data_format: 'PIL' or 'numpy' or 'torch'. The format of the images in the dataset.
+    -Output:
+        A Dataset object that can be used in a DataLoader.
+
+    __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
+    '''
+    def __init__(self, root_dir, transform=None):
+        self.root_dir = root_dir
+        self.transform = transform
+        self.opt_path = os.path.join(self.root_dir, 'opt')
+        self.sar_path = os.path.join(self.root_dir, 'sar')
+        self.sar_ndvi_filenames = sorted(os.listdir(self.sar_path))
+    
+    def __len__(self):
+        return len(self.sar_ndvi_filenames)
+
+    def __getitem__(self, idx):
+        sar_path = os.path.join(self.sar_path, self.sar_ndvi_filenames[idx])
+        ndvi_path = os.path.join(self.opt_path, self.sar_ndvi_filenames[idx])
+
+        sar_img = torch.load(sar_path)
+        ndvi_img = torch.load(ndvi_path)
+
+        if self.transform:
+            sar_img = self.transform(sar_img)
+            ndvi_img = self.transform(ndvi_img)
+
+        sar_img = (sar_img+1)/2
+        ndvi_img = (ndvi_img+1)/2
+        
+        return sar_img, ndvi_img
+    
 class get_data_superres(Dataset):
     '''
     This class allows to store the data in a Dataset that can be used in a DataLoader

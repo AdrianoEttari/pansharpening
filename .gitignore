@@ -177,6 +177,7 @@ sentinel_data_crops/
 imgs_sample/
 up42_sentinel2_patches/
 up42_sentinel2_fullsized/
+SAR_TO_NDVI_dataset/
 
 # Files
 *.pdf
