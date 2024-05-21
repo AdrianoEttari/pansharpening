@@ -442,8 +442,8 @@ class Diffusion:
                         
                     fig, axs = plt.subplots(5,3, figsize=(15,15))
                     for i in range(5):
-                        SAR_img = val_loader.dataset[i][0]
-                        NDVI_img = val_loader.dataset[i][1]
+                        SAR_img = val_loader.dataset[i][0].to(self.device)
+                        NDVI_img = val_loader.dataset[i][1].to(self.device)
 
                         if self.ema_smoothing:
                             NDVI_pred_img = self.sample(n=1,model=ema_model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)############################# EMA ############################
@@ -468,8 +468,8 @@ class Diffusion:
 
                     fig, axs = plt.subplots(5,3, figsize=(15,15))
                     for i in range(5):
-                        SAR_img = val_loader.dataset[i][0]
-                        NDVI_img = val_loader.dataset[i][1]
+                        SAR_img = val_loader.dataset[i][0].to(self.device)
+                        NDVI_img = val_loader.dataset[i][1].to(self.device)
 
                         if self.ema_smoothing:
                             NDVI_pred_img = self.sample(n=1,model=ema_model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)############################# EMA ############################
