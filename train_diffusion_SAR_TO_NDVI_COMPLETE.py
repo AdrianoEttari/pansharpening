@@ -490,8 +490,8 @@ class Diffusion:
                     model.eval()
                     
                     for (SAR_img,NDVI_img) in pbar_val:
-                        SAR_img = val_loader.dataset[i][0]
-                        NDVI_img = val_loader.dataset[i][1]
+                        SAR_img = val_loader.dataset[i][0].to(self.device)
+                        NDVI_img = val_loader.dataset[i][1].to(self.device)
 
                         t = self.sample_timesteps(NDVI_img.shape[0]).to(self.device)
                         # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size)with random integers from 1 to noise_steps.
