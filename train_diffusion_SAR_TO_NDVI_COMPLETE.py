@@ -476,7 +476,7 @@ class Diffusion:
                         else:
                             NDVI_pred_img = self.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)
                        
-                        axs[i,0].imshow(SAR_img[0].unsqueeze(0).unsqueeze(0).permute(1,2,0).cpu().numpy())
+                        axs[i,0].imshow(SAR_img[0].unsqueeze(0).permute(1,2,0).cpu().numpy())
                         axs[i,0].set_title('SAR image')
                         axs[i,1].imshow(NDVI_img.permute(1,2,0).cpu().numpy())
                         axs[i,1].set_title('NDVI image')
