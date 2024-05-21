@@ -228,23 +228,19 @@ class Diffusion:
         Input:
             n: the number of images we want to sample
             SAR_img: the SAR_img
+            NDVI_channels: the number of NDVI channels  
             input_channels: the number of input channels
             plot_gif_bool: if True, the function will plot a gif with the generated images for each class
         
         Output:
-            x: a tensor of shape (n, input_channels, self.image_size, self.image_size) with the generated images
+            x: a tensor of shape (n, NDVI_channels, self.image_size, self.image_size) with the generated images
         '''
         SAR_img = SAR_img.to(self.device).unsqueeze(0)
 
         frames = []
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
-            if self.Degradation_type.lower() == 'downblur':
-                x = torch.randn((n, NDVI_channels, self.image_size, self.image_size))
-            elif self.Degradation_type.lower() == 'bsrgan' or self.Degradation_type.lower() == 'downblurnoise':
-                x = torch.randn((n, NDVI_channels, self.image_size, self.image_size))
-            else:
-                raise ValueError('The degradation type must be either BSRGAN or DownBlur')
+            x = torch.randn((n, NDVI_channels, self.image_size, self.image_size))
             # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
@@ -434,6 +430,8 @@ class Diffusion:
             running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
+            # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND MAKE THE PREDICTIONS TO AVOID REDUNDANCY
+            # IN THE ELSE STATEMENT, THERE IS EXACTLY THE SAME. 
             if self.multiple_gpus:
                 if self.device==0 and epoch % check_preds_epoch == 0:
                     if val_loader is None:
@@ -452,7 +450,7 @@ class Diffusion:
                         else:
                             NDVI_pred_img = self.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)
                        
-                        axs[i,0].imshow(SAR_img.permute(1,2,0).cpu().numpy())
+                        axs[i,0].imshow(SAR_img[0].unsqueeze(0).permute(1,2,0).cpu().numpy())
                         axs[i,0].set_title('SAR image')
                         axs[i,1].imshow(NDVI_img.permute(1,2,0).cpu().numpy())
                         axs[i,1].set_title('NDVI image')
@@ -478,7 +476,7 @@ class Diffusion:
                         else:
                             NDVI_pred_img = self.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)
                        
-                        axs[i,0].imshow(SAR_img.permute(1,2,0).cpu().numpy())
+                        axs[i,0].imshow(SAR_img[0].unsqueeze(0).unsqueeze(0).permute(1,2,0).cpu().numpy())
                         axs[i,0].set_title('SAR image')
                         axs[i,1].imshow(NDVI_img.permute(1,2,0).cpu().numpy())
                         axs[i,1].set_title('NDVI image')
@@ -518,19 +516,20 @@ class Diffusion:
                     running_val_loss /= len(val_loader.dataset)
                     print(f"Epoch {epoch}: Running Val loss ({loss}){running_val_loss}")
 
-
-            if val_loader is not None:
                 if running_val_loss < best_loss - 0:
                     best_loss = running_val_loss
                     epochs_without_improving = 0
-                    if self.ema_smoothing:
-                        if self.multiple_gpus:
-                            if self.device==0:
+                    if self.multiple_gpus:
+                        if self.device==0:
+                            if self.ema_smoothing:
                                 self._save_snapshot(epoch, ema_model)############################# EMA ############################
-                        else:
-                            self._save_snapshot(epoch, ema_model)############################# EMA ############################
+                            else:
+                                self._save_snapshot(epoch, model)
                     else:
-                        self._save_snapshot(epoch, model)      
+                        if self.ema_smoothing:
+                            self._save_snapshot(epoch, ema_model)############################# EMA ############################
+                        else:
+                            self._save_snapshot(epoch, model)      
                 else:
                     epochs_without_improving += 1
 
@@ -602,7 +601,7 @@ def launch(args):
 
 
 
-    train_path = f'{dataset_path}/train'
+    train_path = f'{dataset_path}/train' 
     valid_path = f'{dataset_path}/test'
 
     train_dataset = get_data_SAR_TO_NDVI(train_path)
@@ -669,7 +668,7 @@ def launch(args):
 
         NDVI_pred_img = diffusion.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=NDVI_channels, plot_gif_bool=plot_gif_bool)
 
-        axs[i,0].imshow(SAR_img.permute(1,2,0).cpu().numpy())
+        axs[i,0].imshow(SAR_img[0].unsqueeze(0).permute(1,2,0).cpu().numpy())
         axs[i,0].set_title('SAR image')
         axs[i,1].imshow(NDVI_img.permute(1,2,0).cpu().numpy())
         axs[i,1].set_title('NDVI image')

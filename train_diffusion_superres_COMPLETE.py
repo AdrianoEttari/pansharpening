@@ -438,6 +438,8 @@ class Diffusion:
             running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
+            # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND MAKE THE PREDICTIONS TO AVOID REDUNDANCY
+            # IN THE ELSE STATEMENT, THERE IS EXACTLY THE SAME. 
             if self.multiple_gpus:
                 if self.device==0 and epoch % check_preds_epoch == 0:
                     if val_loader is None:
@@ -522,19 +524,20 @@ class Diffusion:
                     running_val_loss /= len(val_loader.dataset)
                     print(f"Epoch {epoch}: Running Val loss ({loss}){running_val_loss}")
 
-
-            if val_loader is not None:
                 if running_val_loss < best_loss - 0:
                     best_loss = running_val_loss
                     epochs_without_improving = 0
-                    if self.ema_smoothing:
-                        if self.multiple_gpus:
-                            if self.device==0:
+                    if self.multiple_gpus:
+                        if self.device==0:
+                            if self.ema_smoothing:
                                 self._save_snapshot(epoch, ema_model)############################# EMA ############################
-                        else:
-                            self._save_snapshot(epoch, ema_model)############################# EMA ############################
+                            else:
+                                self._save_snapshot(epoch, model)
                     else:
-                        self._save_snapshot(epoch, model)      
+                        if self.ema_smoothing:
+                            self._save_snapshot(epoch, ema_model)############################# EMA ############################
+                        else:
+                            self._save_snapshot(epoch, model)  
                 else:
                     epochs_without_improving += 1
 
