@@ -367,7 +367,7 @@ class RRDB(nn.Module):
 ################################################ Models #################################################
 #########################################################################################################
 class Attention_UNet_superres(nn.Module):
-    def __init__(self, image_channels=3, out_dim=3, device='cuda'):
+    def __init__(self, image_channels=3, out_dim=3, device=None):
         super().__init__()
         self.image_channels = image_channels
         self.down_channels = (16,32,64,128,256) # Note that there are 4 downsampling layers and 4 upsampling layers.
@@ -483,7 +483,7 @@ class Attention_UNet_superres(nn.Module):
         return self.output(x)
 
 class Residual_Attention_UNet_superres(nn.Module):
-    def __init__(self, image_channels=3, out_dim=3, device='cuda'):
+    def __init__(self, image_channels=3, out_dim=3, device=None):
         super().__init__()
         self.image_channels = image_channels
         self.down_channels = (16,32,64,128,256) # Note that there are 4 downsampling layers and 4 upsampling layers.
@@ -599,7 +599,7 @@ class Residual_Attention_UNet_superres(nn.Module):
         return self.output(x)
     
 class Residual_MultiHeadAttention_UNet_superres(nn.Module):
-    def __init__(self, image_channels=3, out_dim=3, device='cuda'):
+    def __init__(self, image_channels=3, out_dim=3, device=None):
         super().__init__()
         self.image_channels = image_channels
         self.down_channels = (16,32,64,128) # Note that there are 4 downsampling layers and 4 upsampling layers.
@@ -733,7 +733,7 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
         return self.output(x)
     
 class Residual_Visual_MultiHeadAttention_UNet_superres(nn.Module):
-    def __init__(self, image_channels=3, start_image_size=None, out_dim=3, device='cuda'):
+    def __init__(self, image_channels=3, start_image_size=None, out_dim=3, device=None):
         super().__init__()
         self.start_image_size = start_image_size
         self.image_channels = image_channels
@@ -876,7 +876,7 @@ class Residual_Visual_MultiHeadAttention_UNet_superres(nn.Module):
         return self.output(x)
 
 class Residual_Attention_UNet_superres_2(nn.Module):
-    def __init__(self, image_channels=3, out_dim=3, device='cuda'):
+    def __init__(self, image_channels=3, out_dim=3, device=None):
         super().__init__()
         self.image_channels = image_channels
         self.down_channels = (16,32,64,128,256) # Note that there are 4 downsampling layers and 4 upsampling layers.
