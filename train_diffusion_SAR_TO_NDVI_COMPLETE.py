@@ -599,8 +599,6 @@ def launch(args):
     else:
         print('Using single GPU')
 
-
-
     train_path = f'{dataset_path}/train' 
     valid_path = f'{dataset_path}/test'
 
