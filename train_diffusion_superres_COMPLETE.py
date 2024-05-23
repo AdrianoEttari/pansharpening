@@ -598,6 +598,13 @@ def launch(args):
     num_crops = args.num_crops
     multiple_gpus = args.multiple_gpus
     ema_smoothing = args.ema_smoothing
+    Blur_radius = args.Blur_radius
+
+    if Blur_radius.lower() != 'random':
+        Blur_radius = float(Blur_radius)
+        print('Using a blur radius of ', Blur_radius)
+    else:
+        print('Using random blur radius from a triangular distribution')
 
     print(f'Using {Degradation_type} degradation')
     
@@ -629,8 +636,8 @@ def launch(args):
         train_path = f'{dataset_path}/train_original'
         valid_path = f'{dataset_path}/val_original'
 
-        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, False, 'PIL', transform)
-        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, False, 'PIL', transform)
+        train_dataset = get_data_superres(train_path, magnification_factor, Blur_radius, False, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, Blur_radius, False, 'PIL', transform)
         
     elif Degradation_type.lower() == 'bsrgan':
         train_path = f'{dataset_path}/train_original'
@@ -647,8 +654,8 @@ def launch(args):
         transforms.Resize((image_size, image_size)),
         ])
 
-        train_dataset = get_data_superres(train_path, magnification_factor, 0.5, True, 'PIL', transform)
-        val_dataset = get_data_superres(valid_path, magnification_factor, 0.5, True, 'PIL', transform)
+        train_dataset = get_data_superres(train_path, magnification_factor, Blur_radius, True, 'PIL', transform)
+        val_dataset = get_data_superres(valid_path, magnification_factor, Blur_radius, True, 'PIL', transform)
         # IF YOU WANT TO USE THE get_data BELOW, YOU NEED ALSO TO ADJUST THE STARTING TENSOR IN THE sample FUNCTION
         # train_dataset = get_data_superres_BSRGAN(train_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='soft_BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'train'))
         # val_dataset = get_data_superres_BSRGAN(valid_path, magnification_factor, image_size, num_crops=num_crops, degradation_type='soft_BSR_plus', destination_folder=os.path.join(dataset_path+'_Dataset', 'val'))
@@ -755,6 +762,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_crops', type=int, default=1)
     parser.add_argument('--multiple_gpus', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--ema_smoothing', type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--Blur_radius', type=str, default='random')
     args = parser.parse_args()
     args.snapshot_folder_path = os.path.join(os.curdir, 'models_run', args.model_name, 'weights')
     launch(args)

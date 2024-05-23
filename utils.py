@@ -127,10 +127,10 @@ class get_data_superres(Dataset):
             x = downsample(y.to('cpu')).to(y.device)
     
         # Add blur
-        if self.blur_radius > 0:
-            x = x.filter(ImageFilter.GaussianBlur(self.blur_radius))
-        elif self.blur_radius == 0:
-            x = x
+        if self.blur_radius == 'random':
+            self.blur_radius = random.triangular(0.5,1.5,1)
+
+        x = x.filter(ImageFilter.GaussianBlur(self.blur_radius))
 
         to_tensor = transforms.ToTensor()
         x = to_tensor(x)
