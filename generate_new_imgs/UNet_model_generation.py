@@ -282,7 +282,7 @@ class gating_signal(nn.Module):
 ################################################ Models #################################################
 #########################################################################################################
 class Residual_Attention_UNet_generation(nn.Module):
-    def __init__(self, image_channels=3, out_dim=3, num_classes=None, device='cuda'):
+    def __init__(self, image_channels=3, out_dim=3, num_classes=None, device=None):
         super().__init__()
         self.image_channels = image_channels
         self.down_channels = (16,32,64,128,256) # Note that there are 4 downsampling layers and 4 upsampling layers.

@@ -262,7 +262,7 @@ class RRDB(nn.Module):
 #########################################################################################################
 
 class Residual_Attention_UNet_SAR_TO_NDVI(nn.Module):
-    def __init__(self, SAR_channels=2, NDVI_channels=1, device='cuda'):
+    def __init__(self, SAR_channels=2, NDVI_channels=1, device=None):
         super().__init__()
         self.SAR_channels = SAR_channels
         self.NDVI_channels = NDVI_channels
