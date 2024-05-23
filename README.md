@@ -12,6 +12,7 @@ In **utils.py** there are the functions used to create the dataset for the super
 In the **models_run** folder there are the different models with their weights and some results relative to the dataset they are trained on. 
 
 🚧🚧🚧🚧🚧  WORK IN PROGRESS 🚧🚧🚧🚧🚧
+
 In **degradation_from_BSRGAN.py** there are functions taken from https://github.com/IceClear/StableSR to degrade the images in a more realistic way; these functions are then applied in the function get_data_superres_BSRGAN() of utils.py.  In the folder **multihead_attention** there are files to implement the multihead attention mechanism in the UNet model instead of the simple attention.
 
 ### Examples
