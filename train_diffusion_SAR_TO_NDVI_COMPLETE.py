@@ -223,14 +223,14 @@ class Diffusion:
         As the name suggests this function is used for sampling. Therefore we want to 
         loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY).
 
-        What we do is to predict the noise conditioned by the time step and by the low resolution image.
+        What we do is to predict the noise conditioned by the time step and by the SAR image.
 
         Input:
             n: the number of images we want to sample
             SAR_img: the SAR_img
             NDVI_channels: the number of NDVI channels  
             input_channels: the number of input channels
-            plot_gif_bool: if True, the function will plot a gif with the generated images for each class
+            plot_gif_bool: if True, the function will plot a gif with the generated images
         
         Output:
             x: a tensor of shape (n, NDVI_channels, self.image_size, self.image_size) with the generated images
@@ -277,7 +277,7 @@ class Diffusion:
 
     def _save_snapshot(self, epoch, model):
         '''
-        This function saves the model state, the optimizer state and the current epoch.
+        This function saves the model state and the current epoch.
         It is a mandatory function in order to be fault tolerant.
 
         Input:
@@ -306,7 +306,7 @@ class Diffusion:
 
     def _load_snapshot(self):
         '''
-        This function loads the model state, the optimizer state and the current epoch from a snapshot.
+        This function loads the model state and the current epoch from a snapshot.
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
@@ -383,7 +383,7 @@ class Diffusion:
 
         for epoch in range(self.epochs_run, epochs):
             if self.multiple_gpus:
-                train_loader.sampler.set_epoch(epoch)
+                train_loader.sampler.set_epoch(epoch) # ensures that the data is shuffled in a consistent manner across multiple epochs
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
@@ -425,16 +425,14 @@ class Diffusion:
             
                 running_train_loss += train_loss.item()
             
-            # scheduler.step()
-
-            running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
+            running_train_loss /= len(train_loader) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
             # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND MAKE THE PREDICTIONS TO AVOID REDUNDANCY
             # IN THE ELSE STATEMENT, THERE IS EXACTLY THE SAME. 
             if self.multiple_gpus:
                 if self.device==0 and epoch % check_preds_epoch == 0:
-                    if val_loader is None:
+                    if val_loader is None: # if there is no validation loader, then we save the weights at the frequency check_preds_epoch
                         if self.ema_smoothing:
                             self._save_snapshot(epoch, ema_model)############################# EMA ############################
                         else:
@@ -513,7 +511,7 @@ class Diffusion:
 
                         running_val_loss += val_loss.item()
 
-                    running_val_loss /= len(val_loader.dataset)
+                    running_val_loss /= len(val_loader)
                     print(f"Epoch {epoch}: Running Val loss ({loss}){running_val_loss}")
 
                 if running_val_loss < best_loss - 0:
@@ -557,7 +555,7 @@ def launch(args):
         patience: the number of epochs after which the training will be stopped if the validation loss is increasing
         SAR_channels: the number of SAR channels
         NDVI_channels: the number of NDVI channels
-        plot_gif_bool: if True, the function will plot a gif with the generated images for each class
+        plot_gif_bool: if True, the function will plot a gif with the generated images
         loss: the loss function to use
         UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
         multiple_gpus: if True, the function will use multiple GPUs

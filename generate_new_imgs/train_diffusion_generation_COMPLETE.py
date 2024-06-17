@@ -268,7 +268,7 @@ class Diffusion:
 
     def _save_snapshot(self, epoch, model):
         '''
-        This function saves the model state, the optimizer state and the current epoch.
+        This function saves the model state and the current epoch.
         It is a mandatory function in order to be fault tolerant.
 
         Input:
@@ -297,7 +297,7 @@ class Diffusion:
 
     def _load_snapshot(self):
         '''
-        This function loads the model state, the optimizer state and the current epoch from a snapshot.
+        This function loads the model state and the current epoch from a snapshot.
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
@@ -370,7 +370,7 @@ class Diffusion:
 
         for epoch in range(self.epochs_run, epochs):
             if self.multiple_gpus:
-                train_loader.sampler.set_epoch(epoch)
+                train_loader.sampler.set_epoch(epoch) # ensures that the data is shuffled in a consistent manner across multiple epochs
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
@@ -410,10 +410,8 @@ class Diffusion:
                     pbar_train.set_postfix(LOSS=train_loss.item()) # set_postfix just adds a message or value displayed after the progress bar. In this case the loss of the current batch.
             
                 running_train_loss += train_loss.item()
-            
-            # scheduler.step()
 
-            running_train_loss /= len(train_loader.dataset) # at the end of each epoch I want the average loss
+            running_train_loss /= len(train_loader) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
             # num_classes = None
@@ -485,7 +483,7 @@ class Diffusion:
 
                         running_val_loss += val_loss.item()
 
-                    running_val_loss /= len(val_loader.dataset)
+                    running_val_loss /= len(val_loader)
                     print(f"Epoch {epoch}: Running Val loss ({loss}){running_val_loss}")
 
                 if running_val_loss < best_loss - 0:
@@ -645,7 +643,7 @@ def launch(args):
     fig, axs = plt.subplots(num_classes,5, figsize=(15,15))
 
     for i in range(num_classes):
-        prediction = diffusion.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+        prediction = diffusion.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=plot_gif_bool)
         for j in range(5):
             axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
             axs[i,j].set_title(f'Class {i}')

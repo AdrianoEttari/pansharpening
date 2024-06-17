@@ -130,7 +130,7 @@ class ResConvBlock(nn.Module):
                                             device=device),
                                   self.batch_norm1,
                                   self.relu)
-        self.conv_upsampled_lr_img = nn.Conv2d(in_ch, out_ch, 3, padding=1)
+        self.conv_skip = nn.Conv2d(in_ch, out_ch, 3, padding=1)
         self.conv2 = nn.Sequential(
                                   nn.Conv2d(out_ch, out_ch,
                                             kernel_size=3, stride=1,
@@ -157,9 +157,9 @@ class ResConvBlock(nn.Module):
     def forward(self, x, t, x_skip):
         # FIRST CONV
         h = self.conv1(x)
-        # SUM THE X-SKIP IMAGE (x+upsampled_lr_img) WITH THE INPUT IMAGE
+        # SUM THE X-SKIP IMAGE WITH THE INPUT IMAGE
         if x_skip is not None:
-            x_skip = self.conv_upsampled_lr_img(x_skip)
+            x_skip = self.conv_skip(x_skip)
             h = h + x_skip
         # TIME EMBEDDING
         time_emb = self.relu(self.time_mlp(t))
@@ -194,7 +194,7 @@ class ConvBlock(nn.Module):
                                             device=device),
                                   self.batch_norm1,
                                   self.relu)
-        self.conv_upsampled_lr_img = nn.Conv2d(in_ch, out_ch, 3, padding=1)
+        self.conv_skip = nn.Conv2d(in_ch, out_ch, 3, padding=1)
         self.conv2 = nn.Sequential(
                                   nn.Conv2d(out_ch, out_ch,
                                             kernel_size=3, stride=1,
@@ -216,9 +216,9 @@ class ConvBlock(nn.Module):
     def forward(self, x, t, x_skip):
         # FIRST CONV
         h = self.conv1(x)
-        # SUM THE X-SKIP IMAGE (x+upsampled_lr_img) WITH THE INPUT IMAGE
+        # SUM THE X-SKIP IMAGE WITH THE INPUT IMAGE
         if x_skip is not None:
-            x_skip = self.conv_upsampled_lr_img(x_skip)
+            x_skip = self.conv_skip(x_skip)
             h = h + x_skip
         # TIME EMBEDDING
         time_emb = self.relu(self.time_mlp(t))
@@ -298,9 +298,6 @@ class Residual_Attention_UNet_generation(nn.Module):
 
         # INITIAL PROJECTION
         self.conv0 = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1) # SINCE THERE IS PADDING 1 AND STRIDE 1,  THE OUTPUT IS THE SAME SIZE OF THE INPUT
-
-        # UPSAMPLE LR IMAGE
-        self.conv_upsampled_lr_img = nn.Conv2d(self.image_channels, self.down_channels[0], 3, padding=1)
         
         # DOWNSAMPLE
         self.conv_blocks = nn.ModuleList([

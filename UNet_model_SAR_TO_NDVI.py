@@ -113,7 +113,7 @@ class AttentionBlock(nn.Module):
 class ResConvBlock(nn.Module):
     '''
     This class defines a residual convolutional block that is used in the downsampling and bottleneck 
-    of the UNet. It doesn not contain the layer for the actual downsampling (i.e. a convolution
+    of the UNet. It does not contain the layer for the actual downsampling (i.e. a convolution
     with stride 2 that is applied immediately after this layer).
     '''
     def __init__(self, in_ch, out_ch, time_emb_dim, device):
@@ -242,7 +242,7 @@ class ResidualBlock(nn.Module):
 
 class RRDB(nn.Module):
     '''
-    This class is used in order to encode the low-resolution image. It is composed of a series of residual blocks.
+    This class is used in order to encode the SAR image. It is composed of a series of residual blocks.
     '''
     def __init__(self, in_channels, out_channels, num_blocks=3):
         super(RRDB, self).__init__()

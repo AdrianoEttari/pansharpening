@@ -164,7 +164,7 @@ class AttentionBlock_2(nn.Module):
 class ResConvBlock(nn.Module):
     '''
     This class defines a residual convolutional block that is used in the downsampling and bottleneck 
-    of the UNet. It doesn not contain the layer for the actual downsampling (i.e. a convolution
+    of the UNet. It does not contain the layer for the actual downsampling (i.e. a convolution
     with stride 2 that is applied immediately after this layer).
     '''
     def __init__(self, in_ch, out_ch, time_emb_dim, device):
@@ -229,7 +229,7 @@ class ResConvBlock(nn.Module):
 class ConvBlock(nn.Module):
     '''
     This class defines a convolutional block that is used in the downsampling and bottleneck 
-    of the UNet. It doesn not contain the layer for the actual downsampling (i.e. a convolution
+    of the UNet. It does not contain the layer for the actual downsampling (i.e. a convolution
     with stride 2 that is applied immediately after this layer).
     '''
     def __init__(self, in_ch, out_ch, time_emb_dim, device):
@@ -662,8 +662,6 @@ class Residual_MultiHeadAttention_UNet_superres(nn.Module):
         self.up_convs = nn.ModuleList([
             nn.Conv2d(self.up_channels[i], self.up_channels[i+1], kernel_size=3, stride=1, padding=1, bias=True).to(self.device) \
             for i in range(len(self.up_channels)-2)])
-
-        
 
         # OUTPUT
         self.output = nn.Conv2d(self.up_channels[-2], self.out_dim, 1)
