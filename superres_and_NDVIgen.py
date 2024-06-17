@@ -1,10 +1,11 @@
-# %%
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% super resolution sampling %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 import torch
 import os
 from utils import get_data_superres
 from torchvision import transforms
 from UNet_model_superres import Residual_Attention_UNet_superres
 from train_diffusion_superres_COMPLETE import Diffusion
+import matplotlib.pyplot as plt
 
 input_channels = output_channels = 3
 device = 'cpu'
@@ -31,47 +32,34 @@ diffusion = Diffusion(
     magnification_factor=magnification_factor,device=device,
     image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
 
-
-# %%
-lr_img = test_dataset[54][0]
+lr_img, hr_img = test_dataset[101]
 superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
-#%%
-from PIL import Image
 
 superres_img = torch.clamp(superres_img, 0, 1)
-superres_img_tosave = transforms.ToPILImage()(superres_img[0].cpu())
-lr_img_tosave = transforms.ToPILImage()(lr_img.cpu())
-lr_img_tosave = lr_img_tosave.resize((image_size, image_size), Image.BICUBIC)
-lr_img_tosave.save('lr_img_anime_data.jpg')
-superres_img_tosave.save('superres_img_anime_data.jpg')
-# %%
-from utils import get_data_superres_2
-train_path = os.path.join('anime_data_50k', 'train_original')
-magnification_factor = 3
-image_size = 64
 
-train_dataset = get_data_superres_2(train_path, magnification_factor, image_size)
-# %%
-import matplotlib.pyplot as plt
-lr_img, hr_img = train_dataset[54]
-plt.imshow(lr_img.permute(1,2,0))
+# from PIL import Image
+# superres_img_tosave = transforms.ToPILImage()(superres_img[0].cpu())
+# lr_img_tosave = transforms.ToPILImage()(lr_img.cpu())
+# lr_img_tosave = lr_img_tosave.resize((image_size, image_size), Image.BICUBIC)
+# lr_img_tosave.save('lr_img_anime_data.jpg')
+# superres_img_tosave.save('superres_img_anime_data.jpg')
+
+fig, axs = plt.subplots(2,3, figsize=(15,10))
+axs = axs.ravel()
+axs[0].imshow(lr_img.permute(1,2,0).detach().cpu())
+axs[0].set_title('low resolution image')
+axs[1].imshow(hr_img.permute(1,2,0).detach().cpu())
+axs[1].set_title('high resolution image')
+axs[2].imshow(superres_img[0].permute(1,2,0).detach().cpu())
+axs[2].set_title('super resolution image')
+axs[3].hist(lr_img.flatten().detach().cpu(), bins=100)
+axs[3].set_title('lr image histogram')
+axs[4].hist(hr_img.flatten().detach().cpu(), bins=100)
+axs[4].set_title('hr image histogram')
+axs[5].hist(superres_img.flatten().detach().cpu(), bins=100)
+axs[5].set_title('sr image histogram')
+
 plt.show()
-plt.imshow(hr_img.permute(1,2,0))
-plt.show()
-# %%
-from PIL import Image, ImageFilter
-from torchvision import transforms
-
-magnification_factor = 2
-hr_img = Image.open(os.path.join('up42_sentinel2_fullsized','image_1.png'))
-blur_radius = 0.5
-
-downsample = transforms.Resize((hr_img.size[0] // magnification_factor, hr_img.size[1] // magnification_factor),
-                                       interpolation=transforms.InterpolationMode.BICUBIC)
-
-lr_img = downsample(hr_img)
-lr_img = lr_img.filter(ImageFilter.GaussianBlur(blur_radius))
-lr_img.save('lr_image_1.png')
 
 
 
@@ -84,6 +72,7 @@ from torchvision import transforms
 from UNet_model_SAR_TO_NDVI import Residual_Attention_UNet_SAR_TO_NDVI
 from train_diffusion_SAR_TO_NDVI_COMPLETE import Diffusion
 from utils import get_data_SAR_TO_NDVI
+import matplotlib.pyplot as plt
 
 test_path = os.path.join('SAR_TO_NDVI_dataset', 'test')
 test_dataset = get_data_SAR_TO_NDVI(test_path)
