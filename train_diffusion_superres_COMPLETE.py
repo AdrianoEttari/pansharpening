@@ -204,7 +204,9 @@ class Diffusion:
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
         epsilon = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
-        # epsilon = 2 * (epsilon - epsilon.min()) / (epsilon.max() - epsilon.min()) - 1
+
+        # epsilon = 2*(epsilon - epsilon.min()) / (epsilon.max() - epsilon.min())-1 # normalize the values between -a and 1 ######### NOT SURE
+        # epsilon = (epsilon - epsilon.min()) / (epsilon.max() - epsilon.min()) # normalize the values between 0 and 1 ######### NOT SURE
         return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, epsilon
 
     def sample_timesteps(self, n):
