@@ -257,7 +257,7 @@ class Diffusion:
                     frames.append(imageio.imread(os.path.join('..', 'models_run', self.model_name, 'results', f'frame_{i}.png')))
                     os.remove(os.path.join('..', 'models_run', self.model_name, 'results', f'frame_{i}.png'))
         if plot_gif_bool == True:
-            imageio.mimsave(os.path.join('..', 'models_run', self.model_name, 'results', 'gif_result.gif'), frames, duration=0.25) 
+            imageio.mimsave(os.path.join('..', 'models_run', self.model_name, 'results', 'gif_result.gif'), frames, duration=0.025) 
         model.train() # enables dropout and batch normalization
         # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
         # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 

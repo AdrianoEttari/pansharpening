@@ -8,16 +8,16 @@ from train_diffusion_superres_COMPLETE import Diffusion
 import matplotlib.pyplot as plt
 
 input_channels = output_channels = 3
-device = 'mps'
-image_size = 512
+device = 'cuda'
+image_size = 256
 transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
         ])
-test_path = os.path.join('anime_data_10k', 'test_original')
-magnification_factor = 8
+test_path = os.path.join('sentinel_data_s2', 'test_original')
+magnification_factor = 4
 noise_schedule = 'cosine'
 noise_steps = 1500
-model_name = 'DDP_Residual_Attention_UNet_superres_magnification8_ANIME50k_DownBlur_512'
+model_name = 'DDP_Residual_Attention_UNet_superres_magnification4_sentinel_data_s2_DownBlur'
 Degradation_type = 'DownBlur'
 
 test_dataset = get_data_superres(test_path, magnification_factor, 0.5, False, 'PIL', transform)
@@ -33,7 +33,7 @@ diffusion = Diffusion(
     image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
 
 lr_img, hr_img = test_dataset[101]
-superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
+superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=True)
 
 superres_img = torch.clamp(superres_img, 0, 1)
 
