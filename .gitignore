@@ -182,7 +182,6 @@ SAR_TO_NDVI_dataset/
 # Files
 *.pdf
 .DS_Store
-*.pptx
 *.npy
 *.tif
 TO_REMOVE.py
