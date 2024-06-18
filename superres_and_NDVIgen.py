@@ -8,12 +8,12 @@ from train_diffusion_superres_COMPLETE import Diffusion
 import matplotlib.pyplot as plt
 
 input_channels = output_channels = 3
-device = 'cpu'
+device = 'mps'
 image_size = 512
 transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
         ])
-test_path = os.path.join('anime_data_50k', 'test_original')
+test_path = os.path.join('anime_data_10k', 'test_original')
 magnification_factor = 8
 noise_schedule = 'cosine'
 noise_steps = 1500
@@ -45,19 +45,21 @@ superres_img = torch.clamp(superres_img, 0, 1)
 # superres_img_tosave.save('superres_img_anime_data.jpg')
 
 fig, axs = plt.subplots(2,3, figsize=(15,10))
+title_font = {'family': 'sans-serif', 'weight': 'bold', 'size': 15}
+
 axs = axs.ravel()
 axs[0].imshow(lr_img.permute(1,2,0).detach().cpu())
-axs[0].set_title('low resolution image')
+axs[0].set_title('low resolution image', fontdict=title_font)
 axs[1].imshow(hr_img.permute(1,2,0).detach().cpu())
-axs[1].set_title('high resolution image')
+axs[1].set_title('high resolution image', fontdict=title_font)
 axs[2].imshow(superres_img[0].permute(1,2,0).detach().cpu())
-axs[2].set_title('super resolution image')
+axs[2].set_title('super resolution image', fontdict=title_font)
 axs[3].hist(lr_img.flatten().detach().cpu(), bins=100)
-axs[3].set_title('lr image histogram')
+axs[3].set_title('lr image histogram', fontdict=title_font)
 axs[4].hist(hr_img.flatten().detach().cpu(), bins=100)
-axs[4].set_title('hr image histogram')
+axs[4].set_title('hr image histogram', fontdict=title_font)
 axs[5].hist(superres_img.flatten().detach().cpu(), bins=100)
-axs[5].set_title('sr image histogram')
+axs[5].set_title('sr image histogram', fontdict=title_font)
 
 plt.show()
 
@@ -103,29 +105,30 @@ SAR_img = test_dataset[101][0]
 NDVI_pred_img = diffusion.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=NDVI_channels, plot_gif_bool=False)
 
 fig, axs = plt.subplots(2,4, figsize=(15,10))
+title_font = {'family': 'sans-serif', 'weight': 'bold', 'size': 15}
 axs = axs.ravel()
 axs[0].imshow(test_dataset[101][0][0].unsqueeze(0).permute(1,2,0).detach().cpu())
-axs[0].set_title('SAR channel 1')
+axs[0].set_title('SAR channel 1', fontdict=title_font)
 axs[1].imshow(test_dataset[101][0][1].unsqueeze(0).permute(1,2,0).detach().cpu())
-axs[1].set_title('SAR channel 2')
+axs[1].set_title('SAR channel 2', fontdict=title_font)
 axs[2].imshow(test_dataset[101][1].permute(1,2,0).detach().cpu())
-axs[2].set_title('NDVI real')
+axs[2].set_title('NDVI real', fontdict=title_font)
 axs[3].imshow(NDVI_pred_img[0].permute(1,2,0).detach().cpu())
-axs[3].set_title('NDVI predicted')
+axs[3].set_title('NDVI predicted', fontdict=title_font)
 axs[4].hist(test_dataset[101][0][0].unsqueeze(0).flatten().detach().cpu(), bins=100)
-axs[4].set_title('SAR channel 1 histogram')
+axs[4].set_title('SAR channel 1 histogram', fontdict=title_font)
 axs[4].set_xlim(0, 1)  # Set x-axis range
 axs[4].set_ylim(0, 800)  # Set y-axis range
 axs[5].hist(test_dataset[101][0][1].unsqueeze(0).flatten().detach().cpu(), bins=100)
-axs[5].set_title('SAR channel 2 histogram')
+axs[5].set_title('SAR channel 2 histogram', fontdict=title_font)
 axs[5].set_xlim(0, 1)  # Set x-axis range
 axs[5].set_ylim(0, 800)  # Set y-axis range
 axs[6].hist(test_dataset[101][1].flatten().detach().cpu(), bins=100)
-axs[6].set_title('NDVI real histogram')
+axs[6].set_title('NDVI real histogram', fontdict=title_font)
 axs[6].set_xlim(0, 1)  # Set x-axis range
 axs[6].set_ylim(0, 800)  # Set y-axis range
 axs[7].hist(NDVI_pred_img[0].flatten().detach().cpu(), bins=100)
-axs[7].set_title('NDVI predicted histogram')
+axs[7].set_title('NDVI predicted histogram', fontdict=title_font)
 axs[7].set_xlim(0, 1)  # Set x-axis range
 axs[7].set_ylim(0, 800)  # Set y-axis range
 plt.show()
