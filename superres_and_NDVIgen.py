@@ -8,16 +8,16 @@ from train_diffusion_superres_COMPLETE import Diffusion
 import matplotlib.pyplot as plt
 
 input_channels = output_channels = 3
-device = 'cuda'
+device = 'cpu'
 image_size = 256
 transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
         ])
-test_path = os.path.join('sentinel_data_s2', 'test_original')
+test_path = os.path.join('anime_data_10k', 'test_original')
 magnification_factor = 4
 noise_schedule = 'cosine'
 noise_steps = 1500
-model_name = 'DDP_Residual_Attention_UNet_superres_magnification4_sentinel_data_s2_DownBlur'
+model_name = 'DDP_Residual_Attention_UNet_superres_magnification4_ANIME50k_DownBlur_standardizedNoise'
 Degradation_type = 'DownBlur'
 
 test_dataset = get_data_superres(test_path, magnification_factor, 0.5, False, 'PIL', transform)
@@ -35,7 +35,7 @@ diffusion = Diffusion(
 lr_img, hr_img = test_dataset[101]
 lr_img = lr_img.to(device)
 hr_img = hr_img.to(device)
-superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=True)
+superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
 
 superres_img = torch.clamp(superres_img, 0, 1)
 
@@ -136,4 +136,20 @@ plt.show()
 # plt.show()
 
 
+# %%
+from PIL import Image
+import numpy as np
+import matplotlib.pyplot as plt
+
+lr_img = Image.open(r'C:\Users\ettari\Desktop\pansharpening\assets\UP42_SUPERRESOLUTION\DownBlur\lr_image_1.png')
+lr_img = np.array(lr_img)
+sr_img_no_agg = Image.open(r'C:\Users\ettari\Desktop\pansharpening\assets\UP42_SUPERRESOLUTION\DownBlur\sr_image_1_no_agg.png')
+# first columns and then rows
+patch_lr_img = lr_img[3850:4100, 1500:1750, :3]
+patch_sr_img_no_agg = sr_img_no_agg[7700:8200, 3000:3500, :3]
+
+plt.imshow(patch_lr_img)
+plt.show()
+plt.imshow(patch_sr_img_no_agg)
+plt.show()
 # %%
