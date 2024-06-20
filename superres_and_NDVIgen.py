@@ -6,21 +6,19 @@ from torchvision import transforms
 from UNet_model_superres import Residual_Attention_UNet_superres
 from train_diffusion_superres_COMPLETE import Diffusion
 import matplotlib.pyplot as plt
+from PIL import Image,ImageFilter
+import random
 
 input_channels = output_channels = 3
-device = 'cpu'
+device = 'mps'
 image_size = 256
-transform = transforms.Compose([
-        transforms.Resize((image_size, image_size)),
-        ])
-test_path = os.path.join('anime_data_10k', 'test_original')
-magnification_factor = 4
+magnification_factor = 2
 noise_schedule = 'cosine'
 noise_steps = 1500
-model_name = 'DDP_Residual_Attention_UNet_superres_magnification4_ANIME50k_DownBlur_standardizedNoise'
-Degradation_type = 'DownBlur'
+model_name = 'DDP_Residual_Attention_UNet_superres_magnification2_up42_sentinel2_patches_downblurnoise'
+Degradation_type = 'DownBlurNoise'
+blur_radius = 0.5
 
-test_dataset = get_data_superres(test_path, magnification_factor, 0.5, False, 'PIL', transform)
 model = Residual_Attention_UNet_superres(input_channels, output_channels, device).to(device)
 
 snapshot_path = os.path.join('models_run', model_name, 'weights', 'snapshot.pt')
@@ -32,11 +30,27 @@ diffusion = Diffusion(
     magnification_factor=magnification_factor,device=device,
     image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
 
-lr_img, hr_img = test_dataset[101]
-lr_img = lr_img.to(device)
-hr_img = hr_img.to(device)
-superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
+# transform = transforms.Compose([
+#         transforms.Resize((image_size, image_size)),
+#         ])
+# test_path = os.path.join('sentinel_data_s2', 'test_original')
+# test_dataset = get_data_superres(test_path, magnification_factor, blur_radius, False, 'PIL', transform)
+# lr_img, hr_img = test_dataset[101]
+# lr_img = lr_img.to(device)
+# hr_img = hr_img.to(device)
 
+hr_img = Image.open('/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/imgs_sample/up42_sample.png')
+transform = transforms.Compose([transforms.Resize((image_size, image_size))])
+hr_img = transform(hr_img)
+downsample = transforms.Resize((hr_img.size[0] // magnification_factor, hr_img.size[1] // magnification_factor),
+                                interpolation=transforms.InterpolationMode.BICUBIC)
+lr_img = downsample(hr_img)
+lr_img = lr_img.filter(ImageFilter.GaussianBlur(blur_radius))
+to_tensor = transforms.ToTensor()
+lr_img = to_tensor(lr_img).to(device)
+hr_img = to_tensor(hr_img).to(device)
+
+superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
 superres_img = torch.clamp(superres_img, 0, 1)
 
 # from PIL import Image
