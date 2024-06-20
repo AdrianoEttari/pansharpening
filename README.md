@@ -28,7 +28,7 @@ The following are examples of image generation vs real of the famous dataset htt
 Let's see some examples of super-resolution of a Sentinel-2 dataset. 
 <img src="assets/UP42_SUPERRESOLUTION/DownBlur/lr_hr_sr.png" height="350px"/>
 
-Here is a video showcasing the denoising results using our model on the Sentinel-2 dataset:
+Here is a video showcasing the denoising process for the super resolution problem of the Sentinel-2 dataset:
 
 ![Video Denoising](https://github.com/AdrianoEttari/pansharpening/blob/main/assets/UP42_SUPERRESOLUTION/DownBlur/up42_superresolution.gif)
 
