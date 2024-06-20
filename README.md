@@ -30,9 +30,7 @@ Let's see some examples of super-resolution of a Sentinel-2 dataset.
 ### Video Denoising Results
 Here is a video showcasing the denoising results using our model on the Sentinel-2 dataset:
 
-[![Video Denoising](/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/models_run/DDP_Residual_Attention_UNet_superres_magnification2_up42_sentinel2_patches_downblur/results/video_denoising.mp4)]
-
-Feel free to watch the video and see the impressive denoising capabilities of our model.
+![Video Denoising](/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/assets/UP42_SUPERRESOLUTION/DownBlur/up42_superresolution.gif)
 
 
 Next, we have some generations of the famous CIFAR10 dataset

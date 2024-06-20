@@ -395,7 +395,6 @@ def gif_maker(frames, frame_stride=1, destination_path='output.gif'):
 
     imageio.mimsave(destination_path, images, duration=0.0005)
 
-
 def video_maker(frames, video_path='output.mp4', fps=50):
     '''
     Convert a sequence of frames to a video.
@@ -444,6 +443,8 @@ def video_maker(frames, video_path='output.mp4', fps=50):
         video.write(frame_bgr)
     
     video.release()
+    # to convert an mp4 into gif, run into terminal ffmpeg -i <input.mp4> -vf "fps=100,scale=320:-1:flags=lanczos" <output.gif>
+
     
 if __name__=="__main__":
     main_folder = 'up42_sentinel2_patches'
