@@ -204,9 +204,6 @@ class Diffusion:
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
         epsilon = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
-
-        # epsilon = 2*(epsilon - epsilon.min()) / (epsilon.max() - epsilon.min())-1 # normalize the values between -a and 1 ######### NOT SURE
-        epsilon = (epsilon - epsilon.min()) / (epsilon.max() - epsilon.min()) # normalize the values between 0 and 1 ######### NOT SURE
         return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, epsilon
 
     def sample_timesteps(self, n):
@@ -247,10 +244,8 @@ class Diffusion:
         with torch.no_grad(): # disables gradient calculation
             if self.Degradation_type.lower() == 'downblur':
                 x = torch.randn((n, input_channels, self.image_size, self.image_size)) # normalize the values between 0 and 1 ######### NOT SURE
-                x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             elif self.Degradation_type.lower() == 'bsrgan' or self.Degradation_type.lower() == 'downblurnoise':
                 x = torch.randn((n, input_channels, self.image_size, self.image_size))
-                x = torch.randn((n, input_channels, self.image_size, self.image_size)) # normalize the values between 0 and 1 ######### NOT SURE
             else:
                 raise ValueError('The degradation type must be either BSRGAN or DownBlur')
             x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
