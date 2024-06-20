@@ -1,6 +1,6 @@
 # %%
 from train_diffusion_generation_COMPLETE import Diffusion
-from generate_new_imgs.UNet_model_generation import Residual_Attention_UNet_generation
+from UNet_model_generation import Residual_Attention_UNet_generation
 import torch
 import matplotlib.pyplot as plt
 from torchvision import transforms
@@ -10,7 +10,7 @@ noise_schedule = 'cosine'
 input_channels = output_channels = 3
 device = 'mps'
 noise_steps = 1500
-model_name = 'DDP_Residual_Attention_UNet_generation_Cifar10'
+model_name = 'DDP_Residual_Attention_UNet_generation_CIFAR10'
 snapshot_path = os.path.join('..', 'models_run', model_name, 'weights', 'snapshot.pt')
 
 image_size = 32
