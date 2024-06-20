@@ -27,6 +27,13 @@ The following are examples of image generation vs real of the famous dataset htt
 
 Let's see some examples of super-resolution of a Sentinel-2 dataset. 
 <img src="assets/UP42_SUPERRESOLUTION/DownBlur/lr_hr_sr.png" height="350px"/>
+### Video Denoising Results
+Here is a video showcasing the denoising results using our model on the Sentinel-2 dataset:
+
+[![Video Denoising](/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/models_run/DDP_Residual_Attention_UNet_superres_magnification2_up42_sentinel2_patches_downblur/results/video_denoising.mp4)](/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/models_run/DDP_Residual_Attention_UNet_superres_magnification2_up42_sentinel2_patches_downblur/results/video_denoising.mp4)
+
+Feel free to watch the video and see the impressive denoising capabilities of our model.
+
 
 Next, we have some generations of the famous CIFAR10 dataset
 <img src="assets/CIFAR10_generated.png" height="250px"/>
