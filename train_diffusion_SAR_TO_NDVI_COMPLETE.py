@@ -8,8 +8,9 @@ import torchvision.transforms as transforms
 import imageio
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset
-from utils import get_data_SAR_TO_NDVI
+from utils import get_data_SAR_TO_NDVI, video_maker
 import copy
+
 
 from UNet_model_SAR_TO_NDVI import Residual_Attention_UNet_SAR_TO_NDVI, EMA
 
@@ -260,13 +261,9 @@ class Diffusion:
                     noise = torch.zeros_like(x) # we don't add noise (it's equal to 0) in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
                 if plot_gif_bool == True:
-                    plt.imshow(x[0][0].cpu().numpy())
-                    plt.savefig(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png'))
-                    plt.title(f't-step={i}', fontsize=30)
-                    frames.append(imageio.imread(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png')))
-                    os.remove(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', f'frame_{i}.png'))
+                    frames.append(x)
         if plot_gif_bool == True:
-            imageio.mimsave(os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'gif_result.gif'), frames, duration=0.25) 
+            video_maker(frames, os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'video_denoising.mp4'), 100)
         model.train() # enables dropout and batch normalization
         # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
         # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 
