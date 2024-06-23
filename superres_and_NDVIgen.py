@@ -15,7 +15,7 @@ image_size = 256
 magnification_factor = 2
 noise_schedule = 'cosine'
 noise_steps = 1500
-model_name = 'DDP_Residual_Attention_UNet_superres_magnification2_up42_sentinel2_patches_downblur'
+model_name = 'prova'
 Degradation_type = 'DownBlur'
 blur_radius = 0.5
 
@@ -43,7 +43,7 @@ to_tensor = transforms.ToTensor()
 lr_img = to_tensor(lr_img).to(device)
 hr_img = to_tensor(hr_img).to(device)
 
-superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=True)
+superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
 # superres_img = torch.clamp(superres_img, 0, 1)
 
 # from PIL import Image
