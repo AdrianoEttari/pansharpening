@@ -29,9 +29,9 @@ class split_aggregation_sampling:
         This function takes an image tensor and splits it into patches of size model_input_size x model_input_size.
         The stride is the number of pixels to skip between patches. If stride is not specified, it is set to model_input_size
         to avoid overlapping patches. 
-        If you want to perform super resolution, the be > 1. The patches_lr list doesn't change,
+        If you want to perform super resolution, the magnification_factor nust be > 1. The patches_lr list doesn't change,
         but the patches_sr_infos list will contain the coordinates of the patches in the high resolution image (otherwise,
-        if magnification_factor=1 patches_sr_infos will containthe coordinates of the patches in the low resolution image).
+        if magnification_factor=1 patches_sr_infos will contain the coordinates of the patches in the low resolution image).
         '''
         if stride is None:
             stride = patch_size  # Default non-overlapping behavior
@@ -86,6 +86,7 @@ class split_aggregation_sampling:
 
         for i in tqdm(range(len(self.patches_lr))):
             patch_sr = self.diffusion_model.sample(1, self.model, self.patches_lr[i].squeeze(0).to(self.device), input_channels=3, plot_gif_bool=False)
+            import ipdb; ipdb.set_trace()
             im_res[:, :, self.patches_sr_infos[i][0]:self.patches_sr_infos[i][1], self.patches_sr_infos[i][2]:self.patches_sr_infos[i][3]] += patch_sr * self.weight
             pixel_count[:, :, self.patches_sr_infos[i][0]:self.patches_sr_infos[i][1], self.patches_sr_infos[i][2]:self.patches_sr_infos[i][3]] += self.weight
         
@@ -96,7 +97,14 @@ class split_aggregation_sampling:
         return im_res
 
     def gaussian_weights(self, tile_width, tile_height, nbatches):
-            """Generates a gaussian mask of weights for tile contributions"""
+            """
+            Generates a gaussian mask of weights for tile contributions
+            
+            This function creates two vectors (x_probs and y_probs) by takin a range from 0 to tile_width and
+            a range from 0 to tile_height, respectively and applying the gaussian function on it.
+            Then the outer product is performed between y_probs and x_probs (so, a 2D matrix is created).
+            Finally, this matrix is tiled (the 2D matrix is repeated for the choosen shape) to have the same shape as the patches.
+            """
             latent_width = tile_width
             latent_height = tile_height
 
@@ -167,7 +175,7 @@ def launch(args):
         magnification_factor=magnification_factor,device=device,
         image_size=model_input_size, model_name=model_name, Degradation_type=Degradation_type,
         multiple_gpus=False, ema_smoothing=False) # Remember that for sampling we don't need to do anything about EMA
-    
+
     aggregation_sampling = split_aggregation_sampling(img_lr, patch_size, stride, magnification_factor, diffusion, device)
     final_pred = aggregation_sampling.aggregation_sampling()
 
