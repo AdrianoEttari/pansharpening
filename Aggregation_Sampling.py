@@ -39,6 +39,10 @@ class split_aggregation_sampling:
         batch_size, channels, height, width = img_to_split.shape
         patches_lr = []
         patches_sr_infos = []
+
+        # fig, axs = plt.subplots(3, 3, figsize=(15,15))
+        # axs = axs.flatten()
+        # counter = 0
         for y in range(0, height + 1, stride):
             for x in range(0, width + 1, stride):
                 if y+patch_size > height:
@@ -58,6 +62,12 @@ class split_aggregation_sampling:
                     patches_lr.append(patch)
                     patches_sr_infos.append((y_start*magnification_factor, y_end*magnification_factor, x_start*magnification_factor, x_end*magnification_factor))
 
+        #             axs[counter].imshow(patch.squeeze(0).permute(1,2,0).cpu().detach().numpy())
+        #             axs[counter].axis('off')
+        #             axs[counter].set_title(f'x_start:{x_start}, x_end:{x_end}\ny_start:{y_start}, y_end:{y_end}', fontsize=20)
+        #             counter += 1
+        # plt.savefig('patches.png')
+        # plt.close()
         return patches_lr, patches_sr_infos
 
     def plot_patches(self):
@@ -84,16 +94,28 @@ class split_aggregation_sampling:
         im_res = torch.zeros([batch_size, channels, height*magnification_factor, width*magnification_factor], dtype=img_lr.dtype, device=self.device)
         pixel_count = torch.zeros([batch_size, channels, height*magnification_factor, width*magnification_factor], dtype=img_lr.dtype, device=self.device)
 
+
         for i in tqdm(range(len(self.patches_lr))):
             patch_sr = self.diffusion_model.sample(1, self.model, self.patches_lr[i].squeeze(0).to(self.device), input_channels=3, plot_gif_bool=False)
-            import ipdb; ipdb.set_trace()
             im_res[:, :, self.patches_sr_infos[i][0]:self.patches_sr_infos[i][1], self.patches_sr_infos[i][2]:self.patches_sr_infos[i][3]] += patch_sr * self.weight
             pixel_count[:, :, self.patches_sr_infos[i][0]:self.patches_sr_infos[i][1], self.patches_sr_infos[i][2]:self.patches_sr_infos[i][3]] += self.weight
-        
+
+        # plt.imshow(im_res.squeeze(0).permute(1,2,0).cpu().detach().numpy())
+        # plt.axis('off')
+        # plt.savefig('super_res_pre_ratio.png')
+
+        # plt.imshow(pixel_count.squeeze(0).permute(1,2,0).cpu().detach().numpy())
+        # plt.axis('off')
+        # plt.savefig('pixel_count.png')
+
         assert torch.all(pixel_count != 0)
         im_res /= pixel_count
         im_res = torch.clamp(im_res, 0, 1)
         
+        # plt.imshow(im_res.squeeze(0).permute(1,2,0).cpu().detach().numpy())
+        # plt.axis('off')
+        # plt.savefig('super_res_post_ratio.png')
+
         return im_res
 
     def gaussian_weights(self, tile_width, tile_height, nbatches):

@@ -570,7 +570,6 @@ class Residual_Attention_UNet_superres(nn.Module):
             upsampled_lr_img = F.interpolate(lr_img.to('cpu'), scale_factor=magnification_factor, mode='bicubic').to(self.device)
 
         upsampled_lr_img = self.conv_upsampled_lr_img(upsampled_lr_img)
-        
         # SUM THE UP SAMPLED LR IMAGE WITH THE INPUT IMAGE
         x = x + upsampled_lr_img
         x_skip = x.clone()

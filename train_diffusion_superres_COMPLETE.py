@@ -111,7 +111,7 @@ class Diffusion:
             multiple_gpus=False,
             ema_smoothing=False,
             ):
-    
+
         self.noise_steps = noise_steps
         self.beta_start = beta_start
         self.beta_end = beta_end
@@ -542,7 +542,7 @@ def launch(args):
     This function is the main and call the training, the sampling and all the other functions in the Diffusion class.
 
     Input:
-        image_size: the size of the images in the dataset
+        image_size: the size of the high resolution images
         dataset_path: the path of the dataset
         batch_size: the batch size
         lr: the learning rate
