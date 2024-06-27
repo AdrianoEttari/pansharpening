@@ -128,6 +128,7 @@ class Diffusion:
         '''
         This function is necessary because it allows to get from the alpha hat that we got with the cosine schedule
         the alpha and the beta which are necessary in order to compute the denoised image during sampling.
+        Check https://arxiv.org/pdf/2102.09672 at section 3.2 for more information.
         The reason we need this function is that with the linear schedule we start from beta, then we calculate alpha and so
         alpha hat, whereas with the cosine schedule we start from alpha hat, then we must calculate beta and so alpha
         because we need them to compute the denoised image.
@@ -179,12 +180,12 @@ class Diffusion:
             epsilon: the error that we add to x_t to move forward
         '''
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None] # Each None is a new dimension (e.g.
-        # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)). It doens't add
-        # them exatly in the same place, but it adds them in the place where the None is.
+        # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)).Basically, the dimensions are added where the None
+        # are placed, and the : determines where the starting dimensions are placed (e.g. a[:,None,:,None] will be shaped (2,1,3,1,4),
+        #a[None,None].shape=a[None,None,:].shape=a[None,None,:,:].shape=a[None,None,:,:,:].shape = (1,1,2,3,4)).
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
         epsilon = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
-        # epsilon = 2 * (epsilon - epsilon.min()) / (epsilon.max() - epsilon.min()) - 1
         return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, epsilon
 
     def sample_timesteps(self, n):
@@ -195,7 +196,7 @@ class Diffusion:
         (notice that it is not the same for each image). 
 
         Input:
-            n: the number of images we want to sample the timesteps for
+            n: the number of images we want to sample the timesteps for (the batch size)
 
         Output:
             t: a tensor of shape (n,) that contains the timesteps for each image
@@ -205,7 +206,8 @@ class Diffusion:
     def sample(self, n, model, target_class=None, cfg_scale=3, input_channels=3, plot_gif_bool=False):
         '''
         As the name suggests this function is used for sampling. Therefore we want to 
-        loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY).
+        loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY
+        while at training time we use the sample_timesteps() function to get just one random time step per batch).
 
         What we do is to predict the noise conditionally, then if the cfg_scale is > 0,
         we also predict the noise unconditionally. Eventually, we apply the formula
@@ -230,7 +232,6 @@ class Diffusion:
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
             x = torch.randn((n, input_channels, self.image_size, self.image_size)).to(self.device)
-            # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
                 # Basically, each of the n image will be processed with the same integer time step t.
@@ -248,24 +249,20 @@ class Diffusion:
                     # If i==1 we sample x_0, which is the final image we want to generate, so we don't add noise.
                     noise = torch.randn_like(x)
                 else:
-                    noise = torch.zeros_like(x) # we don't add noise (it's equal to 0) in the last time step because it would just make the final outcome worse.
+                    noise = torch.zeros_like(x) # we don't add noise in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
                 if plot_gif_bool == True:
                     frames.append(x)
         if plot_gif_bool == True:
             video_maker(frames, os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'video_denoising.mp4'), 100)
         model.train() # enables dropout and batch normalization
-        # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
-        # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 
-        # otherwise outputs them. The same (but opposit reasoning) for the maximum.
-        # +1 and /2 just to bring the values back to 0 to 1.
-        # x = (x * 255).type(torch.uint8)
         return x
 
     def _save_snapshot(self, epoch, model):
         '''
         This function saves the model state and the current epoch.
-        It is a mandatory function in order to be fault tolerant.
+        It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
+        it from the last snapshot.
 
         Input:
             epoch: the current epoch
@@ -293,7 +290,8 @@ class Diffusion:
 
     def _load_snapshot(self):
         '''
-        This function loads the model state and the current epoch from a snapshot.
+        This function loads the model state and the last epoch of training (so that we can restart the
+        training at this point instead of restarting from 0) from a snapshot.
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
@@ -348,7 +346,6 @@ class Diffusion:
         # optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
         # Basically, weight decay is a regularization technique that penalizes large weights. It's a way to prevent overfitting. In AdamW, 
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
-        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
         if loss == 'MSE':
             loss_function = nn.MSELoss()
@@ -411,7 +408,7 @@ class Diffusion:
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
             # num_classes = None
-            # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND MAKE THE PREDICTIONS TO AVOID REDUNDANCY
+            # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND COMPUTE THE PREDICTIONS TO AVOID REDUNDANCY
             # IN THE ELSE STATEMENT, THERE IS EXACTLY THE SAME. 
             if self.multiple_gpus:
                 if self.device==0 and epoch % check_preds_epoch == 0:
