@@ -13,18 +13,25 @@ import imageio
 import cv2
 
 def add_Gaussian_noise(img, noise_level1=2, noise_level2=25):
+    '''
+    This function adds Gaussian noise to the image. The noise level is randomly chosen between noise_level1 and noise_level2.
+    There are three possibilities of adding noise depending on the value of rnum:
+    - rnum > 0.6: add color Gaussian noise (add to the image a sample from a normal distribution with mean=0 and std=noise_level/255.0 of the same shape of the image).
+    - rnum < 0.4: add grayscale Gaussian noise (add to the image a sample from a normal distribution with mean=0 and std=noise_level/255.0 of shape (height_img,width_img,1)).
+    - 0.4 < rnum < 0.6: add noise (add to the image a sample from a multivariate normal distribution with mean=[0,0,0] and covariance matrix=abs(L**2*conv) of shape (height_img,width_img,3), where L is a random number between 0 and 1 and conv is a random covariance matrix).
+    '''
     noise_level = random.randint(noise_level1, noise_level2)
     rnum = np.random.rand()
     img = img.permute(1,2,0).numpy()
-    if rnum > 0.6:   # add color Gaussian noise
+    if rnum > 0.6:   # add color Gaussian noise (add to the image a sample from a normal distribution with mean=0 and std=noise_level/255.0 of the same shape of the image)
         img += np.random.normal(0, noise_level/255.0, img.shape).astype(np.float32)
-    elif rnum < 0.4: # add grayscale Gaussian noise
+    elif rnum < 0.4: # add grayscale Gaussian noise (add to the image a sample from a normal distribution with mean=0 and std=noise_level/255.0 of shape (height_img,width_img,1))
         img += np.random.normal(0, noise_level/255.0, (*img.shape[:2], 1)).astype(np.float32)
     else:            # add  noise
-        L = noise_level2/255.
+        L = noise_level2/255. # noise_level2 is assumed to be in the range [0,255] so, let's bring to the range [0,1]
         D = np.diag(np.random.rand(3))
-        U = orth(np.random.rand(3,3))
-        conv = np.dot(np.dot(np.transpose(U), D), U)
+        U = orth(np.random.rand(3,3)) # computes the orthogonal basis for the range of a matrix.
+        conv = np.dot(np.dot(np.transpose(U), D), U) # The covariance matrix (conv) is constructed by transforming the diagonal matrix (D) with the orthogonal matrix (U)
         img += np.random.multivariate_normal([0,0,0], np.abs(L**2*conv), img.shape[:2]).astype(np.float32)
     img = np.clip(img, 0.0, 1.0)
     img = torch.tensor(img).permute(2,0,1).to(torch.float)
@@ -42,14 +49,15 @@ class get_data_SAR_TO_NDVI(Dataset):
     -Output:
         A Dataset object that can be used in a DataLoader.
 
-    __getitem__ returns x and y. The split in batches must be done in the DataLoader (not here).
+    __getitem__ returns sar_img and ndvi_img. The split in batches must be done in the DataLoader (not here).
     '''
-    def __init__(self, root_dir, transform=None):
+    def __init__(self, root_dir, transform=None, data_format='torch'):
         self.root_dir = root_dir
         self.transform = transform
         self.opt_path = os.path.join(self.root_dir, 'opt')
         self.sar_path = os.path.join(self.root_dir, 'sar')
         self.sar_ndvi_filenames = sorted(os.listdir(self.sar_path))
+        self.data_format = data_format
     
     def __len__(self):
         return len(self.sar_ndvi_filenames)
@@ -58,8 +66,19 @@ class get_data_SAR_TO_NDVI(Dataset):
         sar_path = os.path.join(self.sar_path, self.sar_ndvi_filenames[idx])
         ndvi_path = os.path.join(self.opt_path, self.sar_ndvi_filenames[idx])
 
-        sar_img = torch.load(sar_path)
-        ndvi_img = torch.load(ndvi_path)
+        if self.data_format == 'PIL':
+            sar_img = Image.open(sar_path)
+            ndvi_img = Image.open(ndvi_path)
+            sar_img = transforms.ToTensor()(sar_img)
+            ndvi_img = transforms.ToTensor()(ndvi_img)
+        elif self.data_format == 'numpy':
+            sar_img = np.load(sar_path)
+            ndvi_img = np.load(ndvi_path)
+            sar_img = torch.tensor(sar_img).to(torch.float)
+            ndvi_img = torch.tensor(ndvi_img).to(torch.float)
+        elif self.data_format == 'torch':
+            sar_img = torch.load(sar_path)
+            ndvi_img = torch.load(ndvi_path)
 
         if self.transform:
             sar_img = self.transform(sar_img)
@@ -74,16 +93,17 @@ class get_data_superres(Dataset):
     '''
     This class allows to store the data in a Dataset that can be used in a DataLoader
     like that train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True).
+    First a downsample is applied to the original images, then a Gaussian blur is applied to the downsampled images (the user may choose between
+    a random blur or a fixed one) and finally there is the option to add Gaussian noise to the downsampled images. The __getitem__
+    function returns the downsampled image (x) and the original image (y).
 
     -Input:
         root_dir: path to the folder where the data is stored. 
-        transform: a torchvision.transforms.Compose object with the transformations that will be applied to the images.
         magnification_factor: factor by which the original images are downsampled.
-        original_imgs_dir: path to the folder where the original images are stored.
         blur_radius: radius of the Gaussian blur that will be applied to the downsampled images.
         Gauss_noise: boolean. If True, Gaussian noise will be added to the downsampled images.
         data_format: 'PIL' or 'numpy' or 'torch'. The format of the images in the dataset.
-        y_finelames: list with the names of the images in the original_imgs_dir.
+        transform: a torchvision.transforms.Compose object with the transformations that will be applied to the images.
     -Output:
         A Dataset object that can be used in a DataLoader.
 
@@ -154,6 +174,7 @@ class get_data_superres_BSRGAN(Dataset):
         magnification_factor: factor by which the original images are downsampled.
         model_input_size: size of the input images to the model.
         num_crops: number of crops to be generated from each image.
+        degradation_type: 'BSR_plus' or 'soft_BSR_plus'. The type of degradation that will be applied to the images.
         destination_folder: path to the folder where the lr and hr images will be saved.
     -Output:
         A Dataset object that can be used in a DataLoader.
@@ -175,9 +196,9 @@ class get_data_superres_BSRGAN(Dataset):
     def BSR_degradation(self):
         '''
         This function takes as input the path of the original images, the magnification factor, the model input size
-        and also the the number of crops to be generated from each image. It returns two lists with the lr and hr images.
+        and also the the number of crops to be generated from each image.
+        It returns two lists, one with the lr images and another with the hr images.
         '''
-        import ipdb; ipdb.set_trace()
         x_images = []
         y_images = []
         for i in tqdm(range(len(self.y_filenames))):
@@ -232,7 +253,7 @@ class get_data_superres_BSRGAN(Dataset):
 
         return x, y
     
-class data_organizer():
+class data_organizer_superresolution():
     '''
     This class allows to organize the data inside main_folder (provided in the __init__) 
     into train_original, val_original and test_original folders that will be created inside
@@ -319,45 +340,9 @@ def convert_png_to_jpg(png_file, jpg_file):
     except Exception as e:
         print("Conversion failed:", e)
 
-def img_splitter(source_folder, destination_folder, desired_width, threshold_rate=0.2):
-    '''
-    This function takes the images into the source_folder and checks if they match the desired_width (=desired_height, considering
-    that the images are square). If they are smaller than the desired_width-threshold, they are not split or resized and
-    we just discard them; by contradiction, if they are larger than the desired_width (desired_height) but smaller than the desired_width+threshold
-    (desired_height+threshold) we just crop them to the desired_width(desired_height); finally, if they are larger than the desired_width+threshold,
-    we split them into overlapping patches of size desired_width x desired_width.
-    '''
-    os.makedirs(destination_folder, exist_ok=True)
-    for img_relative_path in tqdm(os.listdir(source_folder)):
-        counter = len(os.listdir(destination_folder))
-        img_path = os.path.join(source_folder, img_relative_path)
-        img = Image.open(img_path)
-        img = np.array(img)
-        width = img.shape[1]
-        height = img.shape[0]
-
-        threshold = desired_width * threshold_rate
-
-        if (width < desired_width - threshold) or (height < desired_width - threshold):
-            print(f"Image {img_relative_path} is too small to be split or resized.")
-        elif (width > desired_width) and (width < desired_width + threshold) and (height > desired_width) and (height < desired_width + threshold):
-            # No need to resize, just save
-            save_path = os.path.join(destination_folder, f"cropped_{counter}.png")
-            Image.fromarray(img).save(save_path)
-            counter += 1
-        else:
-            # Perform cropping
-            for i in range(0, width - desired_width, desired_width // 2):  # Overlapping by half width
-                for j in range(0, height - desired_width, desired_width // 2):  # Overlapping by half height
-                    cropped_img = img[j:j + desired_width, i:i + desired_width]
-                    save_path = os.path.join(destination_folder, f"cropped_{counter}.png")
-                    Image.fromarray(cropped_img).save(save_path)
-                    counter += 1
-
-
 def gif_maker(frames, frame_stride=1, destination_path='output.gif'):
     '''
-    This function saves in a the desired path the frames in a gif format
+    This function saves the frames that are passed in input as a gif.
 
     *Input:
         - frames: list of frames to be saved in a gif
@@ -448,7 +433,7 @@ def video_maker(frames, video_path='output.mp4', fps=50):
     
 if __name__=="__main__":
     main_folder = 'up42_sentinel2_patches'
-    data_organizer = data_organizer(main_folder)
+    data_organizer = data_organizer_superresolution(main_folder)
     data_organizer.split_files(split_ratio=(0.85,0.1,0.05))
     for root, dirs, files in os.walk(main_folder):
         for file in files:
