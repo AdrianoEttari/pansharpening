@@ -76,24 +76,6 @@ class CombinedLoss(nn.Module):
         combined_loss = self.weight_first * first_loss_value + (1-self.weight_first) * second_loss_value
         return combined_loss
     
-class CombinedLoss_MSE_PercLoss(nn.Module):
-    def __init__(self, MSE_loss, Perc_loss, weight_MSE_loss=0.5):
-        super(CombinedLoss_MSE_PercLoss, self).__init__()
-        self.MSE_loss = MSE_loss
-        self.Perc_loss = Perc_loss
-        self.weight_MSE_loss = weight_MSE_loss
-
-    def forward(self, predicted_noise, target_noise, hr_img, hr_img_noised, alpha_hat_t, epoch):
-        alpha_hat_t = alpha_hat_t[:, None, None, None]
-        MSE_loss_value = self.MSE_loss(predicted_noise, target_noise)
-        if epoch > 50:
-            hr_img_denoised = (hr_img_noised - torch.sqrt(1-alpha_hat_t)*predicted_noise)/torch.sqrt(alpha_hat_t)
-            Perc_loss_value = self.Perc_loss(hr_img_denoised, hr_img)
-            combined_loss = self.weight_MSE_loss * MSE_loss_value + (1-self.weight_MSE_loss) * Perc_loss_value
-            return combined_loss
-        else:
-            return MSE_loss_value
-
 class Diffusion:
     def __init__(
             self,
@@ -148,6 +130,7 @@ class Diffusion:
         '''
         This function is necessary because it allows to get from the alpha hat that we got with the cosine schedule
         the alpha and the beta which are necessary in order to compute the denoised image during sampling.
+        Check https://arxiv.org/pdf/2102.09672 at section 3.2 for more information.
         The reason we need this function is that with the linear schedule we start from beta, then we calculate alpha and so
         alpha hat, whereas with the cosine schedule we start from alpha hat, then we must calculate beta and so alpha
         because we need them to compute the denoised image.
@@ -199,8 +182,9 @@ class Diffusion:
             epsilon: the error that we add to x_t to move forward
         '''
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None] # Each None is a new dimension (e.g.
-        # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)). It doens't add
-        # them exatly in the same place, but it adds them in the place where the None is.
+        # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)). Basically, the dimensions are added where the None
+        # are placed, and the : determines where the starting dimensions are placed (e.g. a[:,None,:,None] will be shaped (2,1,3,1,4),
+        #a[None,None].shape=a[None,None,:].shape=a[None,None,:,:].shape=a[None,None,:,:,:].shape = (1,1,2,3,4)).
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
         epsilon = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
@@ -214,7 +198,7 @@ class Diffusion:
         (notice that it is not the same for each image). 
 
         Input:
-            n: the number of images we want to sample the timesteps for
+            n: the number of images we want to sample the timesteps for (the batch size)
 
         Output:
             t: a tensor of shape (n,) that contains the timesteps for each image
@@ -224,7 +208,8 @@ class Diffusion:
     def sample(self, n, model, lr_img, input_channels=3, plot_gif_bool=False):
         '''
         As the name suggests this function is used for sampling. Therefore we want to 
-        loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY).
+        loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY
+        while at training time we use the sample_timesteps() function to get just one random time step per batch).
 
         What we do is to predict the noise conditioned by the time step and by the low resolution image.
 
@@ -263,18 +248,13 @@ class Diffusion:
                     # If i==1 we sample x_0, which is the final image we want to generate, so we don't add noise.
                     noise = torch.randn_like(x)
                 else:
-                    noise = torch.zeros_like(x) # we don't add noise (it's equal to 0) in the last time step because it would just make the final outcome worse.
+                    noise = torch.zeros_like(x) # we don't add noise in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
                 if plot_gif_bool == True:
                     frames.append(x)
         if plot_gif_bool == True:
             video_maker(frames, os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'video_denoising.mp4'), 100)
         model.train() # enables dropout and batch normalization
-        # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
-        # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 
-        # otherwise outputs them. The same (but opposit reasoning) for the maximum.
-        # +1 and /2 just to bring the values back to 0 to 1.
-        # x = (x * 255).type(torch.uint8)
         return x
 
     def _save_snapshot(self, epoch, model):
@@ -309,7 +289,8 @@ class Diffusion:
 
     def _load_snapshot(self):
         '''
-        This function loads the model state, the optimizer state and the current epoch from a snapshot.
+        This function loads the model state and the last epoch of training (so that we can restart the
+        training at this point instead of restarting from 0) from a snapshot.
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
@@ -359,7 +340,6 @@ class Diffusion:
         # optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
         # Basically, weight decay is a regularization technique that penalizes large weights. It's a way to prevent overfitting. In AdamW, 
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
-        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
         if self.ema_smoothing:
             ema = EMA(beta=0.995)############################# EMA ############################
@@ -430,7 +410,7 @@ class Diffusion:
             running_train_loss /= len(train_loader) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
-            # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND MAKE THE PREDICTIONS TO AVOID REDUNDANCY
+            # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND COMPUTE THE PREDICTIONS TO AVOID REDUNDANCY
             # IN THE ELSE STATEMENT, THERE IS EXACTLY THE SAME. 
             if self.multiple_gpus:
                 if self.device==0 and epoch % check_preds_epoch == 0:

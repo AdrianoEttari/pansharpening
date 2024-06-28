@@ -30,7 +30,7 @@ diffusion = Diffusion(
     magnification_factor=magnification_factor,device=device,
     image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
 
-img_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/imgs_sample/up42_sample.png'
+img_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/imgs_sample/up42_sample_lr.png'
 
 hr_img = Image.open(img_path)
 transform = transforms.Compose([transforms.Resize((image_size, image_size))])

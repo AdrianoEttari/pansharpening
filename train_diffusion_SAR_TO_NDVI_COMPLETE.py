@@ -77,24 +77,6 @@ class CombinedLoss(nn.Module):
         combined_loss = self.weight_first * first_loss_value + (1-self.weight_first) * second_loss_value
         return combined_loss
     
-class CombinedLoss_MSE_PercLoss(nn.Module):
-    def __init__(self, MSE_loss, Perc_loss, weight_MSE_loss=0.5):
-        super(CombinedLoss_MSE_PercLoss, self).__init__()
-        self.MSE_loss = MSE_loss
-        self.Perc_loss = Perc_loss
-        self.weight_MSE_loss = weight_MSE_loss
-
-    def forward(self, predicted_noise, target_noise, hr_img, hr_img_noised, alpha_hat_t, epoch):
-        alpha_hat_t = alpha_hat_t[:, None, None, None]
-        MSE_loss_value = self.MSE_loss(predicted_noise, target_noise)
-        if epoch > 50:
-            hr_img_denoised = (hr_img_noised - torch.sqrt(1-alpha_hat_t)*predicted_noise)/torch.sqrt(alpha_hat_t)
-            Perc_loss_value = self.Perc_loss(hr_img_denoised, hr_img)
-            combined_loss = self.weight_MSE_loss * MSE_loss_value + (1-self.weight_MSE_loss) * Perc_loss_value
-            return combined_loss
-        else:
-            return MSE_loss_value
-
 class Diffusion:
     def __init__(
             self,
@@ -141,13 +123,14 @@ class Diffusion:
             self.beta = self.from_alpha_hat_to_beta()
             self.alpha = 1. - self.beta
 
-    def from_alpha_hat_to_beta(self):
+    def from_alpha_hat_to_beta(self): 
         '''
         This function is necessary because it allows to get from the alpha hat that we got with the cosine schedule
         the alpha and the beta which are necessary in order to compute the denoised image during sampling.
+        Check https://arxiv.org/pdf/2102.09672 at section 3.2 for more information.
         The reason we need this function is that with the linear schedule we start from beta, then we calculate alpha and so
         alpha hat, whereas with the cosine schedule we start from alpha hat, then we must calculate beta and so alpha
-        because we need them to compute the denoised image.
+        because we need them to compute the denoised image. 
 
         Input:
             alpha_hat: a tensor of shape (noise_steps,) that contains the alpha_hat values for each noise step.
@@ -196,12 +179,12 @@ class Diffusion:
             epsilon: the error that we add to x_t to move forward
         '''
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None] # Each None is a new dimension (e.g.
-        # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)). It doens't add
-        # them exatly in the same place, but it adds them in the place where the None is.
+        # if a tensor has shape (2,3,4), a[None,None,:,None] will be shaped (1,1,2,1,3,4)). Basically, the dimensions are added where the None
+        # are placed, and the : determines where the starting dimensions are placed (e.g. a[:,None,:,None] will be shaped (2,1,3,1,4),
+        #a[None,None].shape=a[None,None,:].shape=a[None,None,:,:].shape=a[None,None,:,:,:].shape = (1,1,2,3,4)).
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
         epsilon = torch.randn_like(x, dtype=torch.float32) # torch.randn_like() returns a tensor of the same shape of x with random values from a standard gaussian
         # (notice that the values inside x are not relevant)
-        # epsilon = 2 * (epsilon - epsilon.min()) / (epsilon.max() - epsilon.min()) - 1
         return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, epsilon
 
     def sample_timesteps(self, n):
@@ -212,37 +195,36 @@ class Diffusion:
         (notice that it is not the same for each image). 
 
         Input:
-            n: the number of images we want to sample the timesteps for
+            n: the number of images we want to sample the timesteps for (the batch size)
 
         Output:
             t: a tensor of shape (n,) that contains the timesteps for each image
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
     
-    def sample(self, n, model, SAR_img, NDVI_channels=1, plot_gif_bool=False):
+    def sample(self, n, model, SAR_img, NDVI_channels=1, generate_video=False):
         '''
         As the name suggests this function is used for sampling. Therefore we want to 
-        loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY).
+        loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY,
+        while at training time we use the sample_timesteps() function to get just one random time step per batch).
 
         What we do is to predict the noise conditioned by the time step and by the SAR image.
 
         Input:
             n: the number of images we want to sample
-            SAR_img: the SAR_img
+            SAR_img: the SAR_img (shaped (SAR_channels, self.image_size, self.image_size))
             NDVI_channels: the number of NDVI channels  
-            input_channels: the number of input channels
-            plot_gif_bool: if True, the function will plot a gif with the generated images
+            generate_video: if True, the function will produce a video with the generated NDVI images.
         
         Output:
             x: a tensor of shape (n, NDVI_channels, self.image_size, self.image_size) with the generated images
         '''
         SAR_img = SAR_img.to(self.device).unsqueeze(0)
 
-        frames = []
+        frames = [] # used to store the frames if we want to generate a video
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
             x = torch.randn((n, NDVI_channels, self.image_size, self.image_size))
-            # x = x-x.min()/(x.max()-x.min()) # normalize the values between 0 and 1
             x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
@@ -258,24 +240,20 @@ class Diffusion:
                     # If i==1 we sample x_0, which is the final image we want to generate, so we don't add noise.
                     noise = torch.randn_like(x)
                 else:
-                    noise = torch.zeros_like(x) # we don't add noise (it's equal to 0) in the last time step because it would just make the final outcome worse.
+                    noise = torch.zeros_like(x) # we don't add noise in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
-                if plot_gif_bool == True:
+                if generate_video == True:
                     frames.append(x)
-        if plot_gif_bool == True:
+        if generate_video == True:
             video_maker(frames, os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'video_denoising.mp4'), 100)
         model.train() # enables dropout and batch normalization
-        # x = (x.clamp(-1, 1) + 1) / 2 # clamp takes a minimum and a maximum. All the terms that you pass
-        # as input to it are then modified: if their are less than the minimum, clamp outputs the minimum, 
-        # otherwise outputs them. The same (but opposit reasoning) for the maximum.
-        # +1 and /2 just to bring the values back to 0 to 1.
-        # x = (x * 255).type(torch.uint8)
         return x
 
     def _save_snapshot(self, epoch, model):
         '''
         This function saves the model state and the current epoch.
-        It is a mandatory function in order to be fault tolerant.
+        It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
+        it from the last snapshot.
 
         Input:
             epoch: the current epoch
@@ -303,7 +281,8 @@ class Diffusion:
 
     def _load_snapshot(self):
         '''
-        This function loads the model state and the current epoch from a snapshot.
+        This function loads the model state and the last epoch of training (so that we can restart the
+        training at this point instead of restarting from 0) from a snapshot.
         It is a mandatory function in order to be fault tolerant. The reason is that if the training is interrupted, we can resume
         it from the last snapshot.
         '''
@@ -335,12 +314,13 @@ class Diffusion:
 
     def train(self, lr, epochs, check_preds_epoch, train_loader, val_loader, patience, loss, verbose):
         '''
-        This function performs the training of the model, saves the snapshots and the model at the end of the training each self.every_n_epochs epochs.
+        This function performs the training of the model, saves the snapshots at each check_preds_epoch epoch and at the end of the training.
 
         Input:
             lr: the learning rate
             epochs: the number of epochs
-            check_preds_epoch: the frequency at which the model will save the predictions
+            check_preds_epoch: specifies the frequency, in terms of epochs, at which the model will perform predictions and save them. Moreover,
+                if val_loader=None then the weights of the model will be saved at this frequency.
             train_loader: the training loader
             val_loader: the validation loader
             patience: the number of epochs after which the training will be stopped if the validation loss is increasing
@@ -354,7 +334,6 @@ class Diffusion:
         # optimizer = torch.optim.AdamW(model.parameters(), lr=lr) # AdamW is a variant of Adam that adds weight decay (L2 regularization)
         # Basically, weight decay is a regularization technique that penalizes large weights. It's a way to prevent overfitting. In AdamW, 
         # the weight decay is added to the gradient and not to the weights. This is because the weights are updated in a different way in AdamW.
-        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
         if self.ema_smoothing:
             ema = EMA(beta=0.995)############################# EMA ############################
@@ -370,17 +349,13 @@ class Diffusion:
             vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
             loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.3)
-        elif loss == 'MSE+Perceptual_imgs':
-            vgg_loss = VGGPerceptualLoss(self.device)
-            mse_loss = nn.MSELoss()
-            loss_function = CombinedLoss_MSE_PercLoss(MSE_loss=mse_loss, Perc_loss=vgg_loss, weight_MSE_loss=0.3)
         
         epochs_without_improving = 0
         best_loss = float('inf')  
 
         for epoch in range(self.epochs_run, epochs):
             if self.multiple_gpus:
-                train_loader.sampler.set_epoch(epoch) # ensures that the data is shuffled in a consistent manner across multiple epochs
+                train_loader.sampler.set_epoch(epoch) # ensures that the data is shuffled in a consistent manner across multiple epochs (it is useful just for the DistributedSampler)
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
@@ -399,17 +374,14 @@ class Diffusion:
                 NDVI_img = NDVI_img.to(self.device)
 
                 t = self.sample_timesteps(NDVI_img.shape[0]).to(self.device)
-                # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size) with random integers from 1 to noise_steps.
-                x_t, noise = self.noise_images(NDVI_img, t) # get batch_size noise images
+                # t is a unidimensional tensor of shape (NDVI_img.shape[0] that is the batch_size) with random integers from 1 to noise_steps.
+                x_t, noise = self.noise_images(NDVI_img, t) # get the noisy images
 
                 optimizer.zero_grad() # set the gradients to 0
 
                 predicted_noise = model(x_t, t, SAR_img) 
 
-                if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
-                    train_loss = loss_function(predicted_noise, noise)
-                elif loss == 'MSE+Perceptual_imgs':
-                    train_loss = loss_function(predicted_noise, noise, NDVI_img, x_t, self.alpha_hat[t], epoch)
+                train_loss = loss_function(predicted_noise, noise)
                 
                 train_loss.backward() # compute the gradients
                 optimizer.step() # update the weights
@@ -425,7 +397,7 @@ class Diffusion:
             running_train_loss /= len(train_loader) # at the end of each epoch I want the average loss
             print(f"Epoch {epoch}: Running Train ({loss}) {running_train_loss}")
 
-            # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND MAKE THE PREDICTIONS TO AVOID REDUNDANCY
+            # IF THERE ARE MULTIPLE GPUs, MAKE JUST THE FIRST ONE SAVE THE SNAPSHOT AND COMPUTE THE PREDICTIONS TO AVOID REDUNDANCY
             # IN THE ELSE STATEMENT, THERE IS EXACTLY THE SAME. 
             if self.multiple_gpus:
                 if self.device==0 and epoch % check_preds_epoch == 0:
@@ -441,9 +413,9 @@ class Diffusion:
                         NDVI_img = val_loader.dataset[i][1].to(self.device)
 
                         if self.ema_smoothing:
-                            NDVI_pred_img = self.sample(n=1,model=ema_model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)############################# EMA ############################
+                            NDVI_pred_img = self.sample(n=1,model=ema_model, SAR_img=SAR_img, NDVI_channels=1, generate_video=False)############################# EMA ############################
                         else:
-                            NDVI_pred_img = self.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)
+                            NDVI_pred_img = self.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=1, generate_video=False)
                        
                         axs[i,0].imshow(SAR_img[0].unsqueeze(0).permute(1,2,0).cpu().numpy())
                         axs[i,0].set_title('SAR image')
@@ -467,9 +439,9 @@ class Diffusion:
                         NDVI_img = val_loader.dataset[i][1].to(self.device)
 
                         if self.ema_smoothing:
-                            NDVI_pred_img = self.sample(n=1,model=ema_model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)############################# EMA ############################
+                            NDVI_pred_img = self.sample(n=1,model=ema_model, SAR_img=SAR_img, NDVI_channels=1, generate_video=False)############################# EMA ############################
                         else:
-                            NDVI_pred_img = self.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=1, plot_gif_bool=False)
+                            NDVI_pred_img = self.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=1, generate_video=False)
                        
                         axs[i,0].imshow(SAR_img[0].unsqueeze(0).permute(1,2,0).cpu().numpy())
                         axs[i,0].set_title('SAR image')
@@ -489,18 +461,15 @@ class Diffusion:
                         NDVI_img = NDVI_img.to(self.device)
 
                         t = self.sample_timesteps(NDVI_img.shape[0]).to(self.device)
-                        # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size)with random integers from 1 to noise_steps.
-                        x_t, noise = self.noise_images(NDVI_img, t) # get batch_size noise images
+                        # t is a unidimensional tensor of shape (NDVI_img.shape[0] that is the batch_size)with random integers from 1 to noise_steps.
+                        x_t, noise = self.noise_images(NDVI_img, t) # get the noisy images
                         
                         if self.ema_smoothing:
                             predicted_noise = ema_model(x_t, t, SAR_img)############################# EMA ############################
                         else:
                             predicted_noise = model(x_t, t, SAR_img) 
                         
-                        if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
-                            val_loss = loss_function(predicted_noise, noise)
-                        elif loss == 'MSE+Perceptual_imgs':    
-                            val_loss = loss_function(predicted_noise, noise, NDVI_img, x_t, self.alpha_hat[t], epoch)
+                        val_loss = loss_function(predicted_noise, noise)
 
                         if verbose:
                             pbar_val.set_postfix(LOSS=val_loss.item()) # set_postfix just adds a message or value
@@ -552,7 +521,7 @@ def launch(args):
         patience: the number of epochs after which the training will be stopped if the validation loss is increasing
         SAR_channels: the number of SAR channels
         NDVI_channels: the number of NDVI channels
-        plot_gif_bool: if True, the function will plot a gif with the generated images
+        generate_video: if True, the function will produce a video with the generated images
         loss: the loss function to use
         UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
         multiple_gpus: if True, the function will use multiple GPUs
@@ -574,7 +543,7 @@ def launch(args):
     noise_steps = args.noise_steps
     patience = args.patience
     SAR_channels, NDVI_channels = args.SAR_channels, args.NDVI_channels
-    plot_gif_bool = args.plot_gif_bool
+    generate_video = args.generate_video
     loss = args.loss
     multiple_gpus = args.multiple_gpus
     ema_smoothing = args.ema_smoothing
@@ -659,7 +628,7 @@ def launch(args):
         SAR_img = train_dataset[i][0]
         NDVI_img = train_dataset[i][1]
 
-        NDVI_pred_img = diffusion.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=NDVI_channels, plot_gif_bool=plot_gif_bool)
+        NDVI_pred_img = diffusion.sample(n=1,model=model, SAR_img=SAR_img, NDVI_channels=NDVI_channels, generate_video=generate_video)
 
         axs[i,0].imshow(SAR_img[0].unsqueeze(0).permute(1,2,0).cpu().numpy())
         axs[i,0].set_title('SAR image')
@@ -692,7 +661,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_path', type=str, default=None)
     parser.add_argument('--SAR_channels', type=int, default=2)
     parser.add_argument('--NDVI_channels', type=int, default=1)
-    parser.add_argument('--plot_gif_bool', type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--generate_video', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--loss', type=str)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet' or 'Residual Attention UNet 2'
     parser.add_argument('--multiple_gpus', type=str2bool, nargs='?', const=True, default=False)
