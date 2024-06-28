@@ -5,9 +5,8 @@ import torch.nn as nn
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
-import imageio
 from tqdm import tqdm
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from utils import get_data_superres, get_data_superres_BSRGAN, video_maker
 import copy
 
@@ -205,7 +204,7 @@ class Diffusion:
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
     
-    def sample(self, n, model, lr_img, input_channels=3, plot_gif_bool=False):
+    def sample(self, n, model, lr_img, input_channels=3, generate_video=False):
         '''
         As the name suggests this function is used for sampling. Therefore we want to 
         loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY
@@ -217,23 +216,21 @@ class Diffusion:
             n: the number of images we want to sample
             lr_img: the low resolution image
             input_channels: the number of input channels
-            plot_gif_bool: if True, the function will plot a gif with the generated images
+            generate_video: if True, the function will produce a video with the generated NDVI images.
         
         Output:
             x: a tensor of shape (n, input_channels, self.image_size, self.image_size) with the generated images
         '''
         lr_img = lr_img.to(self.device).unsqueeze(0)
 
-        frames = []
+        frames = [] # used to store the frames if we want to generate a video
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
-            if self.Degradation_type.lower() == 'downblur':
-                x = torch.randn((n, input_channels, self.image_size, self.image_size)) # normalize the values between 0 and 1 ######### NOT SURE
-            elif self.Degradation_type.lower() == 'bsrgan' or self.Degradation_type.lower() == 'downblurnoise':
-                x = torch.randn((n, input_channels, self.image_size, self.image_size))
+            if self.Degradation_type.lower() == 'downblur' or self.Degradation_type.lower() == 'bsrgan' or self.Degradation_type.lower() == 'downblurnoise':
+                x = torch.randn((n, input_channels, self.image_size, self.image_size)) 
             else:
                 raise ValueError('The degradation type must be either BSRGAN or DownBlur')
-            x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
+            x = x.to(self.device) 
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
                 # Basically, each of the n image will be processed with the same integer time step t.
@@ -250,9 +247,9 @@ class Diffusion:
                 else:
                     noise = torch.zeros_like(x) # we don't add noise in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
-                if plot_gif_bool == True:
+                if generate_video == True:
                     frames.append(x)
-        if plot_gif_bool == True:
+        if generate_video == True:
             video_maker(frames, os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'video_denoising.mp4'), 100)
         model.train() # enables dropout and batch normalization
         return x
@@ -326,7 +323,8 @@ class Diffusion:
         Input:
             lr: the learning rate
             epochs: the number of epochs
-            check_preds_epoch: the frequency at which the model will save the predictions
+            check_preds_epoch: specifies the frequency, in terms of epochs, at which the model will perform predictions and save them. Moreover,
+                if val_loader=None then the weights of the model will be saved at this frequency.
             train_loader: the training loader
             val_loader: the validation loader
             patience: the number of epochs after which the training will be stopped if the validation loss is increasing
@@ -355,17 +353,15 @@ class Diffusion:
             vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
             loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.3)
-        elif loss == 'MSE+Perceptual_imgs':
-            vgg_loss = VGGPerceptualLoss(self.device)
-            mse_loss = nn.MSELoss()
-            loss_function = CombinedLoss_MSE_PercLoss(MSE_loss=mse_loss, Perc_loss=vgg_loss, weight_MSE_loss=0.3)
-        
+        else:
+            raise ValueError('The Loss must be either MSE or MAE or Huber or MSE+Perceptual_noise')
+
         epochs_without_improving = 0
         best_loss = float('inf')  
 
         for epoch in range(self.epochs_run, epochs):
             if self.multiple_gpus:
-                train_loader.sampler.set_epoch(epoch) # ensures that the data is shuffled in a consistent manner across multiple epochs
+                train_loader.sampler.set_epoch(epoch) # ensures that the data is shuffled in a consistent manner across multiple epochs (it is useful just for the DistributedSampler)
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
@@ -384,17 +380,14 @@ class Diffusion:
                 hr_img = hr_img.to(self.device)
 
                 t = self.sample_timesteps(hr_img.shape[0]).to(self.device)
-                # t is a unidimensional tensor of shape (images.shape[0] that is the batch_size) with random integers from 1 to noise_steps.
-                x_t, noise = self.noise_images(hr_img, t) # get batch_size noise images
+                # t is a unidimensional tensor of shape (hr_img.shape[0] that is the batch_size) with random integers from 1 to noise_steps.
+                x_t, noise = self.noise_images(hr_img, t) # get the noisy images
 
                 optimizer.zero_grad() # set the gradients to 0
 
                 predicted_noise = model(x_t, t, lr_img, self.magnification_factor) 
 
-                if loss == 'MSE' or loss == 'MAE' or loss == 'Huber' or loss == 'MSE+Perceptual_noise':
-                    train_loss = loss_function(predicted_noise, noise)
-                elif loss == 'MSE+Perceptual_imgs':
-                    train_loss = loss_function(predicted_noise, noise, hr_img, x_t, self.alpha_hat[t], epoch)
+                train_loss = loss_function(predicted_noise, noise)
                 
                 train_loss.backward() # compute the gradients
                 optimizer.step() # update the weights
@@ -426,9 +419,9 @@ class Diffusion:
                         hr_img = val_loader.dataset[i][1]
 
                         if self.ema_smoothing:
-                            superres_img = self.sample(n=1,model=ema_model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)############################# EMA ############################
+                            superres_img = self.sample(n=1,model=ema_model, lr_img=lr_img, input_channels=lr_img.shape[0], generate_video=False)############################# EMA ############################
                         else:
-                            superres_img = self.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
+                            superres_img = self.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], generate_video=False)
                        
                         axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
                         axs[i,0].set_title('Low resolution image')
@@ -452,9 +445,9 @@ class Diffusion:
                         hr_img = val_loader.dataset[i][1]
 
                         if self.ema_smoothing:
-                            superres_img = self.sample(n=1,model=ema_model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)############################# EMA ############################
+                            superres_img = self.sample(n=1,model=ema_model, lr_img=lr_img, input_channels=lr_img.shape[0], generate_video=False)############################# EMA ############################
                         else:
-                            superres_img = self.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=False)
+                            superres_img = self.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], generate_video=False)
                        
                         axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
                         axs[i,0].set_title('Low resolution image')
@@ -537,11 +530,11 @@ def launch(args):
         patience: the number of epochs after which the training will be stopped if the validation loss is increasing
         input_channels: the number of input channels
         output_channels: the number of output channels
-        plot_gif_bool: if True, the function will plot a gif with the generated images
+        generate_video: if True, the function will produce a video with the generated NDVI images.
         magnification_factor: the magnification factor (i.e. the factor by which the image is magnified in the super-resolution task)
         loss: the loss function to use
-        UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
-        Degradation_type: the type of degradation to use (BSRGAN, DownBlur)
+        UNet_type: the type of UNet to use (attention unet, residual attention unet, residual attention unet 2, residual multihead attention unet, residual visual multihead attention unet)
+        Degradation_type: the type of degradation to use (downblur, bsrgan, downblurnoise)
         num_crops: the number of crops to use
         multiple_gpus: if True, the function will use multiple GPUs
         ema_smoothing: if True, the function will use EMA smoothing
@@ -562,7 +555,7 @@ def launch(args):
     noise_steps = args.noise_steps
     patience = args.patience
     input_channels, output_channels = args.inp_out_channels, args.inp_out_channels
-    plot_gif_bool = args.plot_gif_bool
+    generate_video = args.generate_video
     magnification_factor = args.magnification_factor
     loss = args.loss
     UNet_type = args.UNet_type
@@ -694,7 +687,7 @@ def launch(args):
         lr_img = train_dataset[i][0]
         hr_img = train_dataset[i][1]
 
-        superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], plot_gif_bool=plot_gif_bool)
+        superres_img = diffusion.sample(n=1,model=model, lr_img=lr_img, input_channels=lr_img.shape[0], generate_video=generate_video)
 
         axs[i,0].imshow(lr_img.permute(1,2,0).cpu().numpy())
         axs[i,0].set_title('Low resolution image')
@@ -726,7 +719,7 @@ if __name__ == '__main__':
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--dataset_path', type=str, default=None)
     parser.add_argument('--inp_out_channels', type=int, default=3) # input channels must be the same of the output channels
-    parser.add_argument('--plot_gif_bool', type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--generate_video', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--loss', type=str)
     parser.add_argument('--magnification_factor', type=int)
     parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet' or 'Residual Attention UNet 2'

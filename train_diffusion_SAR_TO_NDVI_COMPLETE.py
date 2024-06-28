@@ -5,9 +5,8 @@ import torch.nn as nn
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
-import imageio
 from tqdm import tqdm
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from utils import get_data_SAR_TO_NDVI, video_maker
 import copy
 
@@ -225,7 +224,7 @@ class Diffusion:
         model.eval() # disables dropout and batch normalization
         with torch.no_grad(): # disables gradient calculation
             x = torch.randn((n, NDVI_channels, self.image_size, self.image_size))
-            x = x.to(self.device) # generates n noisy images of shape (3, self.image_size, self.image_size)
+            x = x.to(self.device) 
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0): 
                 t = (torch.ones(n) * i).long().to(self.device) # tensor of shape (n) with all the elements equal to i.
                 # Basically, each of the n image will be processed with the same integer time step t.
@@ -349,6 +348,8 @@ class Diffusion:
             vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
             loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.3)
+        else:
+            raise ValueError('The Loss must be either MSE or MAE or Huber or MSE+Perceptual_noise')
         
         epochs_without_improving = 0
         best_loss = float('inf')  
@@ -663,7 +664,7 @@ if __name__ == '__main__':
     parser.add_argument('--NDVI_channels', type=int, default=1)
     parser.add_argument('--generate_video', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--loss', type=str)
-    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet' or 'Residual Attention UNet 2'
+    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # for now we have only the Residual Attention UNet
     parser.add_argument('--multiple_gpus', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--ema_smoothing', type=str2bool, nargs='?', const=True, default=False)
     args = parser.parse_args()

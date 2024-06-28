@@ -7,7 +7,7 @@ import torch.utils.data
 from torchvision import datasets
 import torchvision.transforms as transforms
 from tqdm import tqdm
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 import copy
 from utils import video_maker
 import numpy as np
@@ -203,7 +203,7 @@ class Diffusion:
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
     
-    def sample(self, n, model, target_class=None, cfg_scale=3, input_channels=3, plot_gif_bool=False):
+    def sample(self, n, model, target_class=None, cfg_scale=3, input_channels=3, generate_video=False):
         '''
         As the name suggests this function is used for sampling. Therefore we want to 
         loop backward (moreover, notice that in the sample we want to perform EVERY STEP CONTIGUOUSLY
@@ -222,7 +222,7 @@ class Diffusion:
             target_class: the target class for the images
             cfg_scale: the scale of the CFG noise
             input_channels: the number of input channels
-            plot_gif_bool: if True, the function will plot a gif with the generated images for each class
+            generate_video: if True, the function will produce a video with the generated NDVI images.
         
         Output:
             x: a tensor of shape (n, input_channels, self.image_size, self.image_size) with the generated images
@@ -251,9 +251,9 @@ class Diffusion:
                 else:
                     noise = torch.zeros_like(x) # we don't add noise in the last time step because it would just make the final outcome worse.
                 x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
-                if plot_gif_bool == True:
+                if generate_video == True:
                     frames.append(x)
-        if plot_gif_bool == True:
+        if generate_video == True:
             video_maker(frames, os.path.join(os.getcwd(), 'models_run', self.model_name, 'results', 'video_denoising.mp4'), 100)
         model.train() # enables dropout and batch normalization
         return x
@@ -357,13 +357,15 @@ class Diffusion:
             vgg_loss = VGGPerceptualLoss(self.device)
             mse_loss = nn.MSELoss()
             loss_function = CombinedLoss(first_loss=mse_loss, second_loss=vgg_loss, weight_first=0.3)
-        
+        else:
+            raise ValueError('The Loss must be either MSE or MAE or Huber or MSE+Perceptual_noise')
+               
         epochs_without_improving = 0
         best_loss = float('inf')  
 
         for epoch in range(self.epochs_run, epochs):
             if self.multiple_gpus:
-                train_loader.sampler.set_epoch(epoch) # ensures that the data is shuffled in a consistent manner across multiple epochs
+                train_loader.sampler.set_epoch(epoch) # ensures that the data is shuffled in a consistent manner across multiple epochs (it is useful just for the DistributedSampler)
             if verbose:
                 pbar_train = tqdm(train_loader,desc='Training', position=0)
                 if val_loader is not None:
@@ -421,9 +423,9 @@ class Diffusion:
                     fig, axs = plt.subplots(num_classes,5, figsize=(15,15))
                     for i in range(num_classes):
                         if self.ema_smoothing:
-                            prediction = self.sample(n=5,model=ema_model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+                            prediction = self.sample(n=5,model=ema_model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], generate_video=False)
                         else:
-                            prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+                            prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], generate_video=False)
                         for j in range(5):
                             axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
                             axs[i,j].set_title(f'Class {i}')
@@ -440,9 +442,9 @@ class Diffusion:
                     fig, axs = plt.subplots(num_classes,5, figsize=(15,15))
                     for i in range(num_classes):
                         if self.ema_smoothing:
-                            prediction = self.sample(n=5,model=ema_model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+                            prediction = self.sample(n=5,model=ema_model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], generate_video=False)
                         else:
-                            prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=False)
+                            prediction = self.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(self.device), input_channels=train_loader.dataset[0][0].shape[0], generate_video=False)
                         for j in range(5):
                             axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
                             axs[i,j].set_title(f'Class {i}')
@@ -520,9 +522,9 @@ def launch(args):
         patience: the number of epochs after which the training will be stopped if the validation loss is increasing
         input_channels: the number of input channels
         output_channels: the number of output channels
-        plot_gif_bool: if True, the function will plot a gif with the generated images for each class
+        generate_video: if True, the function will produce a video with the generated NDVI images.
         loss: the loss function to use
-        UNet_type: the type of UNet to use (Attention UNet, Residual Attention UNet)
+        UNet_type: the type of UNet to use (residual attention unet)
         multiple_gpus: if True, the function will use multiple GPUs
         ema_smoothing: if True, the function will use EMA smoothing
 
@@ -541,7 +543,7 @@ def launch(args):
     noise_steps = args.noise_steps
     patience = args.patience
     input_channels, output_channels = args.inp_out_channels, args.inp_out_channels
-    plot_gif_bool = args.plot_gif_bool
+    generate_video = args.generate_video
     loss = args.loss
     UNet_type = args.UNet_type
     multiple_gpus = args.multiple_gpus
@@ -636,7 +638,7 @@ def launch(args):
     fig, axs = plt.subplots(num_classes,5, figsize=(15,15))
 
     for i in range(num_classes):
-        prediction = diffusion.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(device), input_channels=train_loader.dataset[0][0].shape[0], plot_gif_bool=plot_gif_bool)
+        prediction = diffusion.sample(n=5,model=model, target_class=torch.tensor([i], dtype=torch.int64).to(device), input_channels=train_loader.dataset[0][0].shape[0], generate_video=generate_video)
         for j in range(5):
             axs[i,j].imshow(prediction[j].permute(1,2,0).cpu().numpy())
             axs[i,j].set_title(f'Class {i}')
@@ -664,9 +666,9 @@ if __name__ == '__main__':
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--dataset_path', type=str, default=None)
     parser.add_argument('--inp_out_channels', type=int, default=3) # input channels must be the same of the output channels
-    parser.add_argument('--plot_gif_bool',  type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--generate_video',  type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--loss', type=str)
-    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # 'Attention UNet' or 'Residual Attention UNet' or 'Residual MultiHead Attention UNet' or 'Residual Attention UNet 2'
+    parser.add_argument('--UNet_type', type=str, default='Residual Attention UNet') # for now we have only the Residual Attention UNet
     parser.add_argument('--multiple_gpus', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--ema_smoothing', type=str2bool, nargs='?', const=True, default=False)
     args = parser.parse_args()
