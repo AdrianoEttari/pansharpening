@@ -30,7 +30,7 @@ diffusion = Diffusion(
     magnification_factor=magnification_factor,device=device,
     image_size=image_size, model_name=model_name, Degradation_type=Degradation_type)
 
-img_path = '/Users/adrianoettari/Desktop/ASSEGNO_DI_RICERCA/pansharpening/imgs_sample/up42_sample_lr.png'
+img_path = os.path.join('imgs_sample','up42_sample_lr.png')
 
 hr_img = Image.open(img_path)
 transform = transforms.Compose([transforms.Resize((image_size, image_size))])
@@ -115,7 +115,7 @@ NDVI_img = test_dataset[101][1]
 # NDVI_img = torch.load(os.path.join('imgs_sample', 'NDVI_sample_2.pt'))
 NDVI_pred_img = diffusion.sample(n=5,model=model, SAR_img=SAR_img, NDVI_channels=NDVI_channels, generate_video=False)
 # NDVI_pred_img = torch.clamp(NDVI_pred_img, 0, 1)
-#%%
+
 fig, axs = plt.subplots(2,4, figsize=(15,10))
 title_font = {'family': 'sans-serif', 'weight': 'bold', 'size': 15}
 axs = axs.ravel()
