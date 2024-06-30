@@ -210,7 +210,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=' ')
     parser.add_argument('--noise_schedule', type=str, default='cosine')
     parser.add_argument('--snapshot_name', type=str, default='snapshot.pt')
-    parser.add_argument('--noise_steps', type=int, default=1000)
+    parser.add_argument('--noise_steps', type=int, default=1500)
     parser.add_argument('--model_input_size', type=int, default=512)
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--UNet_type', type=str)

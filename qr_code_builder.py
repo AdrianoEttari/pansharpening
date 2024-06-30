@@ -5,11 +5,11 @@ def qr_builder(args):
     url = args.url
     title = args.title
 
-    # Create QR code instance
+    # Create QR code instance with a higher resolution
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
+        box_size=20,  # Increase box size for higher resolution
         border=4,
     )
 
@@ -22,7 +22,7 @@ def qr_builder(args):
 
     # Define a font
     try:
-        font = ImageFont.truetype("arial.ttf", 30)
+        font = ImageFont.truetype("arial.ttf", 100)
     except IOError:
         font = ImageFont.load_default()
 
@@ -40,8 +40,9 @@ def qr_builder(args):
     text_position = ((new_img.size[0] - text_width) // 2, 5)
     draw.text(text_position, title, fill="black", font=font)
 
-    # Save the image
-    new_img.save(f"{title}_qr_code.png")
+    # Save the image with a high DPI setting
+    new_img.save(f"{title}_qr_code.png", dpi=(300, 300))
+
 
 if __name__ == "__main__":
     import argparse
