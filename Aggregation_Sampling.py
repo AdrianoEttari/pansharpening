@@ -64,9 +64,9 @@ class split_aggregation_sampling:
 
         #             axs[counter].imshow(patch.squeeze(0).permute(1,2,0).cpu().detach().numpy())
         #             axs[counter].axis('off')
-        #             axs[counter].set_title(f'x_start:{x_start}, x_end:{x_end}\ny_start:{y_start}, y_end:{y_end}', fontsize=20)
+        #             axs[counter].set_title(f'x range:({x_start}, {x_end})\ny range:({y_start}, {y_end})', fontdict={'family': 'sans-serif', 'weight': 'bold', 'size': 24})
         #             counter += 1
-        # plt.savefig('patches.png')
+        # plt.savefig('patches.png', dpi=300, bbox_inches='tight', pad_inches=0)
         # plt.close()
         return patches_lr, patches_sr_infos
 
@@ -94,19 +94,19 @@ class split_aggregation_sampling:
         im_res = torch.zeros([batch_size, channels, height*magnification_factor, width*magnification_factor], dtype=img_lr.dtype, device=self.device)
         pixel_count = torch.zeros([batch_size, channels, height*magnification_factor, width*magnification_factor], dtype=img_lr.dtype, device=self.device)
 
-
         for i in tqdm(range(len(self.patches_lr))):
-            patch_sr = self.diffusion_model.sample(1, self.model, self.patches_lr[i].squeeze(0).to(self.device), input_channels=3, plot_gif_bool=False)
+            patch_sr = self.diffusion_model.sample(1, self.model, self.patches_lr[i].squeeze(0).to(self.device), input_channels=3, generate_video=False)
             im_res[:, :, self.patches_sr_infos[i][0]:self.patches_sr_infos[i][1], self.patches_sr_infos[i][2]:self.patches_sr_infos[i][3]] += patch_sr * self.weight
             pixel_count[:, :, self.patches_sr_infos[i][0]:self.patches_sr_infos[i][1], self.patches_sr_infos[i][2]:self.patches_sr_infos[i][3]] += self.weight
 
+        
         # plt.imshow(im_res.squeeze(0).permute(1,2,0).cpu().detach().numpy())
         # plt.axis('off')
-        # plt.savefig('super_res_pre_ratio.png')
+        # plt.savefig('super_res_pre_ratio.png', dpi=300, bbox_inches='tight', pad_inches=0)
 
         # plt.imshow(pixel_count.squeeze(0).permute(1,2,0).cpu().detach().numpy())
         # plt.axis('off')
-        # plt.savefig('pixel_count.png')
+        # plt.savefig('pixel_count.png', dpi=300, bbox_inches='tight', pad_inches=0)
 
         assert torch.all(pixel_count != 0)
         im_res /= pixel_count
@@ -114,7 +114,7 @@ class split_aggregation_sampling:
         
         # plt.imshow(im_res.squeeze(0).permute(1,2,0).cpu().detach().numpy())
         # plt.axis('off')
-        # plt.savefig('super_res_post_ratio.png')
+        # plt.savefig('super_res_post_ratio.png', dpi=300, bbox_inches='tight', pad_inches=0)
 
         return im_res
 
